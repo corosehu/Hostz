@@ -1090,7 +1090,7 @@ class ScriptManager:
         if missing_keys:
             status.append(f"  \\- ❌ *Required Fields:* Missing `{', '.join(missing_keys)}`\\.")
         else:
-            status.append("  \\- ✅ *Required Fields:* All present (app_key, app_secret, refresh_token)\\.")
+            status.append("  \\- ✅ *Required Fields:* All present \\(app\\_key, app\\_secret, refresh\\_token\\)\\.")
 
         # 3. Check token status
         if not config.get("refresh_token"):
@@ -1099,7 +1099,7 @@ class ScriptManager:
             status.append("  \\- 🟡 *Token Status:* Expired\\. Will attempt refresh on next backup\\.")
         else:
             expires_in = timedelta(seconds=int(config.get("expires_at", 0) - time.time()))
-            status.append(f"  \\- ✅ *Token Status:* Access token is valid \\(expires in {expires_in}\\)\\.")
+            status.append(f"  \\- ✅ *Token Status:* Access token is valid \\(expires in {escape_markdown(str(expires_in))}\\)\\.")
 
         # 4. Attempt to connect to Dropbox
         try:
@@ -1130,18 +1130,16 @@ def resilient_api_call(func):
         for attempt in range(3):
             try:
                 return await func(*args, **kwargs)
+            except telegram.error.NetworkError as e:
+                if attempt == 2:
+                    logger.error(f"Telegram API call failed after 3 attempts due to network issues: {e}")
+                    raise  # Re-raise the final NetworkError
+                logger.warning(f"Network error in {func.__name__}, attempt {attempt + 1}: {e}. Retrying...")
+                await asyncio.sleep(2)  # Increased delay for better recovery
             except Exception as e:
-                # Explicitly check if the error is a NetworkError. Do not retry other errors like BadRequest.
-                if isinstance(e, telegram.error.NetworkError):
-                    if attempt == 2:
-                        logger.error(f"Telegram API call failed after 3 attempts due to network issues: {e}")
-                        raise  # Re-raise the final NetworkError
-                    logger.warning(f"Network error in {func.__name__}, attempt {attempt + 1}: {e}. Retrying...")
-                    await asyncio.sleep(2)  # Increased delay for better recovery
-                else:
-                    # This is not a recoverable network error, so log it and re-raise immediately.
-                    logger.error(f"Unrecoverable API error in {func.__name__}: {e}")
-                    raise e
+                # This is not a recoverable network error, so log it and re-raise immediately.
+                logger.error(f"Unrecoverable API error in {func.__name__}: {e}")
+                raise e
     return wrapper
 
 
