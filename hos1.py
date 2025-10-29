@@ -1124,18 +1124,24 @@ def escape_markdown(text: str) -> str:
 
 
 def resilient_api_call(func):
-    """Decorator to retry Telegram API calls on network errors."""
+    """Decorator to retry Telegram API calls only on specific, recoverable network errors."""
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
         for attempt in range(3):
             try:
                 return await func(*args, **kwargs)
-            except telegram.error.NetworkError as e:
-                if attempt == 2:
-                    logger.error(f"Telegram API call failed after 3 attempts: {e}")
-                    raise
-                logger.warning(f"Network error in {func.__name__}, attempt {attempt + 1}: {e}. Retrying...")
-                await asyncio.sleep(1)
+            except Exception as e:
+                # Explicitly check if the error is a NetworkError. Do not retry other errors like BadRequest.
+                if isinstance(e, telegram.error.NetworkError):
+                    if attempt == 2:
+                        logger.error(f"Telegram API call failed after 3 attempts due to network issues: {e}")
+                        raise  # Re-raise the final NetworkError
+                    logger.warning(f"Network error in {func.__name__}, attempt {attempt + 1}: {e}. Retrying...")
+                    await asyncio.sleep(2)  # Increased delay for better recovery
+                else:
+                    # This is not a recoverable network error, so log it and re-raise immediately.
+                    logger.error(f"Unrecoverable API error in {func.__name__}: {e}")
+                    raise e
     return wrapper
 
 
