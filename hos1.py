@@ -487,7 +487,7 @@ class ScriptManager:
                 f"✅ *{backup_type} Backup Uploaded*\n\n"
                 f"*File:* `{escape_markdown(backup_path.name)}`\n"
                 f"*Link:* [Direct Download]({download_link})\n\n"
-                f"Restore using `/importlink`\."
+                f"Restore using `/importlink`\\."
             )
         else:
             error_details = result
@@ -1065,16 +1065,16 @@ class ScriptManager:
 
         # 1. Check for config file existence and permissions
         if not config_path.exists():
-            status.append("  \\- ❌ *Config File:* Not found at `dropbox_config.json`.")
+            status.append("  \\- ❌ *Config File:* Not found at `dropbox_config\\.json`\\.")
             return "\n".join(status)
 
-        status.append(f"  \\- ✅ *Config File:* Found at `{escape_markdown(str(config_path))}`.")
+        status.append(f"  \\- ✅ *Config File:* Found at `{escape_markdown(str(config_path))}`\\.")
 
         try:
             # This will trigger a read and catch permission errors
             config = self.load_dropbox_config()
             if not config: # Handles JSON error or other read issues
-                 status.append("  \\- ❌ *Config Access:* Could not be read. Check logs for permission or JSON format errors.")
+                 status.append("  \\- ❌ *Config Access:* Could not be read\\. Check logs for permission or JSON format errors\\.")
                  return "\n".join(status)
 
         except Exception as e:
@@ -1086,29 +1086,29 @@ class ScriptManager:
         missing_keys = [key for key in required_keys if not config.get(key)]
 
         if missing_keys:
-            status.append(f"  \\- ❌ *Required Fields:* Missing `{', '.join(missing_keys)}`.")
+            status.append(f"  \\- ❌ *Required Fields:* Missing `{', '.join(missing_keys)}`\\.")
         else:
-            status.append("  \\- ✅ *Required Fields:* All present (app_key, app_secret, refresh_token).")
+            status.append("  \\- ✅ *Required Fields:* All present (app_key, app_secret, refresh_token)\\.")
 
         # 3. Check token status
         if not config.get("refresh_token"):
-            status.append("  \\- 🟡 *Token Status:* Needs setup. Use `/setup_dropbox`.")
+            status.append("  \\- 🟡 *Token Status:* Needs setup\\. Use `/setup_dropbox`\\.")
         elif time.time() >= config.get("expires_at", 0) - 60:
-            status.append("  \\- 🟡 *Token Status:* Expired. Will attempt refresh on next backup.")
+            status.append("  \\- 🟡 *Token Status:* Expired\\. Will attempt refresh on next backup\\.")
         else:
             expires_in = timedelta(seconds=int(config.get("expires_at", 0) - time.time()))
-            status.append(f"  \\- ✅ *Token Status:* Access token is valid (expires in {expires_in}).")
+            status.append(f"  \\- ✅ *Token Status:* Access token is valid (expires in {expires_in})\\.")
 
         # 4. Attempt to connect to Dropbox
         try:
             dbx = self.get_dropbox_client()
             if dbx:
                 dbx.users_get_current_account()
-                status.append("  \\- ✅ *API Connection:* Successfully connected to Dropbox API.")
+                status.append("  \\- ✅ *API Connection:* Successfully connected to Dropbox API\\.")
             else:
-                status.append("  \\- ❌ *API Connection:* Failed to initialize Dropbox client. Check logs.")
+                status.append("  \\- ❌ *API Connection:* Failed to initialize Dropbox client\\. Check logs\\.")
         except Exception as e:
-            status.append(f"  \\- ❌ *API Connection:* Failed with error: `{escape_markdown(str(e))}`.")
+            status.append(f"  \\- ❌ *API Connection:* Failed with error: `{escape_markdown(str(e))}`\\.")
 
         return "\n".join(status)
 
@@ -1253,7 +1253,7 @@ class TelegramBot:
             user_id = update.effective_user.id
             
             if user_id not in self.script_manager.terminal_sessions:
-                await update.message.reply_text("❌ *Terminal mode not active\.*", parse_mode=ParseMode.MARKDOWN_V2)
+                await update.message.reply_text("❌ *Terminal mode not active\\.*", parse_mode=ParseMode.MARKDOWN_V2)
                 return
             
             success, message = self.script_manager.send_input_to_terminal(user_id, " ", add_newline=False)
@@ -1360,7 +1360,7 @@ class TelegramBot:
         url = context.args[0]
         if not ("dropbox.com" in url and "dl=1" in url):
             await update.message.reply_text(
-                "❌ *Invalid URL:* Please provide a Dropbox direct download link \(`?dl=1`\)\.", parse_mode=ParseMode.MARKDOWN_V2
+                "❌ *Invalid URL:* Please provide a Dropbox direct download link \\(`?dl=1`\\)\\.", parse_mode=ParseMode.MARKDOWN_V2
             )
             return
 
@@ -1398,7 +1398,7 @@ class TelegramBot:
             restore_success, restore_message = await asyncio.to_thread(_restore_blocking_part)
 
             if restore_success:
-                await processing_msg.edit_text(f"✅ *Backup Restored\!**\n\n{escape_markdown(restore_message)}", parse_mode=ParseMode.MARKDOWN_V2)
+                await processing_msg.edit_text(f"✅ *Backup Restored\\!**\n\n{escape_markdown(restore_message)}", parse_mode=ParseMode.MARKDOWN_V2)
             else:
                 await processing_msg.edit_text(f"❌ *Restore Failed:**\n\n{escape_markdown(restore_message)}", parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -1426,10 +1426,10 @@ class TelegramBot:
 🤖 *Enhanced Advanced Hosting Management Bot*
 
 🚀 *Features:*
-• Upload and run scripts \(\.py, \.sh, \.js\)
-• Real\-time interactive terminal access
+• Upload and run scripts \\(\\.py, \\.sh, \\.js\\)
+• Real\\-time interactive terminal access
 • Background process management
-• *Script\-specific input support*
+• *Script\\-specific input support*
 • Auto\-restart capabilities
 • System monitoring
 • Log management
@@ -1492,107 +1492,107 @@ Your enhanced server is ready\! 🎯
             help_text = """
 🤖 *Enhanced Advanced Hosting Bot — Complete Guide*
 
-Your Telegram\-powered server manager with script\-specific input, interactive terminal, and Dropbox backup\.
+Your Telegram\\-powered server manager with script\\-specific input, interactive terminal, and Dropbox backup\\.
 
-\-\-\-
+\\-\\-\\-
 
 📁 *Script Management*
-• Upload \.py, \.sh, or \.js files → auto\-detected & saved with unique ID
+• Upload \\.py, \\.sh, or \\.js files → auto\\-detected & saved with unique ID
 • Scripts start stopped by default
 • Manage via inline buttons or commands:
-  • ▶️ Start \| ⏹️ Stop \| 🔄 Restart
-  • 📋 View Logs \| 🗑️ Delete
-  • 🔄 Toggle Auto\-restart \(crash recovery\)
+  • ▶️ Start \\| ⏹️ Stop \\| 🔄 Restart
+  • 📋 View Logs \\| 🗑️ Delete
+  • 🔄 Toggle Auto\\-restart \\(crash recovery\\)
 
-🎯 *Script\-Specific Input \(Core Feature\!\)*
-> Send input directly to any running script — even with multiple scripts active\!
+🎯 *Script\\-Specific Input \\(Core Feature\\!\\)*
+> Send input directly to any running script — even with multiple scripts active\\!
 • `/sinput <script_id> <text>`
-  → e\.g\., `/sinput abc123 my2FACode`
+  → e\\.g\\., `/sinput abc123 my2FACode`
 • `/pinput <pid> <text>`
-  → e\.g\., `/pinput 5678 confirm`
+  → e\\.g\\., `/pinput 5678 confirm`
 ✅ Works independently of terminal mode
 ✅ Ideal for Instagram bots, auth prompts, interactive scripts
 
-\-\-\-
+\\-\\-\\-
 
 🖥️ *Interactive Terminal Mode*
-• `/terminal` → toggle PTY\-based interactive shell \(no freezing\!\)
-• In terminal mode: every message \= shell command
-• Special input commands \(work anytime, inside or outside terminal\):
-  • `/enter <text>` → send \+ press Enter \(for passwords\)
+• `/terminal` → toggle PTY\\-based interactive shell \\(no freezing\\!\\)
+• In terminal mode: every message \\= shell command
+• Special input commands \\(work anytime, inside or outside terminal\\):
+  • `/enter <text>` → send \\+ press Enter \\(for passwords\\)
   • `/space` → send space key
-  • `/ctrl_c` → send interrupt \(Ctrl\+C\)
-  • `/input <text>` → send raw text \(no Enter\)
+  • `/ctrl_c` → send interrupt \\(Ctrl\\+C\\)
+  • `/input <text>` → send raw text \\(no Enter\\)
 
-💡 *Pro Tip:* Use `/terminal` for system tasks, and `/sinput` for script prompts — both work together\!
+💡 *Pro Tip:* Use `/terminal` for system tasks, and `/sinput` for script prompts — both work together\\!
 
-\-\-\-
+\\-\\-\\-
 
 📊 *System & Process Control*
 • `/status` → CPU, RAM, disk, uptime, script count
-• `/ps` → list top resource\-consuming processes
+• `/ps` → list top resource\\-consuming processes
 • `/kill <pid>` → terminate any process
-• Auto\-monitoring: crashed scripts logged & optionally restarted
+• Auto\\-monitoring: crashed scripts logged & optionally restarted
 
-\-\-\-
+\\-\\-\\-
 
-📦 *Backup & Restore \(Dropbox Integrated\)*
+📦 *Backup & Restore \\(Dropbox Integrated\\)*
 
-🔐 *Setup \(One\-Time\):*
-1\. Create Dropbox app → get APP\_KEY & APP\_SECRET
-2\. Run: `/setup_dropbox <key> <secret>`
-3\. Open auth link → copy code
-4\. Run: `/dropbox_code <code>`
-✅ Done\! Backups auto\-upload to `/BotBackups/`
+🔐 *Setup \\(One\\-Time\\):*
+1\\. Create Dropbox app → get APP\\_KEY & APP\\_SECRET
+2\\. Run: `/setup_dropbox <key> <secret>`
+3\\. Open auth link → copy code
+4\\. Run: `/dropbox_code <code>`
+✅ Done\\! Backups auto\\-upload to `/BotBackups/`
 
 🔄 *Commands:*
-• `/export` → create manual backup → auto\-upload to Dropbox
+• `/export` → create manual backup → auto\\-upload to Dropbox
   ⚠️ Requires Dropbox setup
 • `/importlink <url>` → restore full bot state
   ✅ URL must be Dropbox direct link ending with `?dl=1`
-  ✅ Example: `https://www\.dropbox\.com/s/xxx/backup\.zip?dl=1`
+  ✅ Example: `https://www\\.dropbox\\.com/s/xxx/backup\\.zip?dl=1`
 
 🛡️ *Safety Features:*
-• Pre\-restore backup created automatically before every `/importlink`
-• Daily auto\-backups \(uploaded to Dropbox\)
-• Keeps last 10 backups locally \(/backups/\)
+• Pre\\-restore backup created automatically before every `/importlink`
+• Daily auto\\-backups \\(uploaded to Dropbox\\)
+• Keeps last 10 backups locally \\(/backups/\\)
 • Full data preserved: scripts, logs, settings, metadata
 
-\-\-\-
+\\-\\-\\-
 
 🔧 *Other Commands*
-• `/cmd <command>` → run single shell command \(non\-interactive, 60s timeout\)
-• `/scripts` → list all scripts with ID, PID, status, and input\-ready indicator
+• `/cmd <command>` → run single shell command \\(non\\-interactive, 60s timeout\\)
+• `/scripts` → list all scripts with ID, PID, status, and input\\-ready indicator
 • `/test` → verify bot is responsive
 
-\-\-\-
+\\-\\-\\-
 
 💡 *Best Practices*
-1\. Always run `/export` before major changes
-2\. Use `/sinput` for Instagram/2FA/password prompts
-3\. Prefer `/terminal` \+ `/ctrl_c` for graceful process stops
-4\. After `/importlink`, all scripts are stopped — start them manually
-5\. Keep Dropbox links private \(they grant full bot restore access\)
+1\\. Always run `/export` before major changes
+2\\. Use `/sinput` for Instagram/2FA/password prompts
+3\\. Prefer `/terminal` \\+ `/ctrl_c` for graceful process stops
+4\\. After `/importlink`, all scripts are stopped — start them manually
+5\\. Keep Dropbox links private \\(they grant full bot restore access\\)
 
-\-\-\-
+\\-\\-\\-
 
 🔒 *Security*
-• Admin\-only access \(your ID: 6827291977 , 5349091019\)
+• Admin\\-only access \\(your ID: 6827291977 , 5349091019\\)
 • All actions logged to `bot.log`
 • File operations sandboxed in `bot_scripts/` and `bot_logs/`
-• No shell injection — commands run safely via subprocess \(no `shell=True`\)
+• No shell injection — commands run safely via subprocess \\(no `shell=True`\\)
 • Dropbox tokens stored with `chmod 600`
 
-\-\-\-
+\\-\\-\\-
 
 🚀 *Perfect For:*
-• Instagram automation \(IG Expert workflows\)
+• Instagram automation \\(IG Expert workflows\\)
 • Crypto trading bots
 • Web scrapers with login prompts
-• Node\.js / Python microservices
-• Any script needing real\-time interaction
+• Node\\.js / Python microservices
+• Any script needing real\\-time interaction
 
-Your server\. Fully automated\. Fully interactive\. Fully yours\.
+Your server\\. Fully automated\\. Fully interactive\\. Fully yours\\.
 """
             await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN_V2)
             
@@ -1617,19 +1617,19 @@ Your server\. Fully automated\. Fully interactive\. Fully yours\.
                 cpu_percent = psutil.cpu_percent(interval=1)
                 status_parts.append(f"• *CPU:* {escape_markdown(f'{cpu_percent}%')} usage")
             except Exception as e:
-                status_parts.append(f"• *CPU:* Unable to read \({escape_markdown(str(e)[:30])}\.\.\.\)")
+                status_parts.append(f"• *CPU:* Unable to read \\({escape_markdown(str(e)[:30])}\\.\\.\\.\\)")
             
             try:
                 memory = psutil.virtual_memory()
-                status_parts.append(f"• *Memory:* {escape_markdown(f'{memory.percent}%')} \({escape_markdown(f'{memory.used // (1024**3)}GB / {memory.total // (1024**3)}GB')}\)")
+                status_parts.append(f"• *Memory:* {escape_markdown(f'{memory.percent}%')} \\({escape_markdown(f'{memory.used // (1024**3)}GB / {memory.total // (1024**3)}GB')}\\)")
             except Exception as e:
-                status_parts.append(f"• *Memory:* Unable to read \({escape_markdown(str(e)[:30])}\.\.\.\)")
+                status_parts.append(f"• *Memory:* Unable to read \\({escape_markdown(str(e)[:30])}\\.\\.\\.\\)")
             
             try:
                 disk = psutil.disk_usage('/')
-                status_parts.append(f"• *Disk:* {escape_markdown(f'{disk.percent}%')} \({escape_markdown(f'{disk.used // (1024**3)}GB / {disk.total // (1024**3)}GB')}\)")
+                status_parts.append(f"• *Disk:* {escape_markdown(f'{disk.percent}%')} \\({escape_markdown(f'{disk.used // (1024**3)}GB / {disk.total // (1024**3)}GB')}\\)")
             except Exception as e:
-                status_parts.append(f"• *Disk:* Unable to read \({escape_markdown(str(e)[:30])}\.\.\.\)")
+                status_parts.append(f"• *Disk:* Unable to read \\({escape_markdown(str(e)[:30])}\\.\\.\\.\\)")
                 
             try:
                 boot_time = datetime.fromtimestamp(psutil.boot_time())
@@ -1725,7 +1725,7 @@ Your server\. Fully automated\. Fully interactive\. Fully yours\.
                 keyboard = [[InlineKeyboardButton("📤 Upload Script", callback_data="upload_help")]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text(
-                    "📂 *No scripts found*\n\nUpload a `\.py`, `\.sh`, or `\.js` file to get started\!",
+                    "📂 *No scripts found*\n\nUpload a `\\.py`, `\\.sh`, or `\\.js` file to get started\\!",
                     reply_markup=reply_markup,
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
@@ -1756,7 +1756,7 @@ Your server\. Fully automated\. Fully interactive\. Fully yours\.
                 ])
             
             # Add legend
-            text += "🎯 \= Input Ready \| 🔄 \= Auto\-restart \| 🟢 \= Running\n"
+            text += "🎯 \\= Input Ready \\| 🔄 \\= Auto\\-restart \\| 🟢 \\= Running\n"
             
             # Add general buttons
             keyboard.append([InlineKeyboardButton("🔄 Refresh", callback_data="list_scripts")])
@@ -1781,7 +1781,7 @@ Your server\. Fully automated\. Fully interactive\. Fully yours\.
         if not self.script_manager.get_dropbox_client():
             await update.message.reply_text(
                 "❌ *Dropbox Not Configured*\n"
-                "Please set up Dropbox integration first using `/setup_dropbox`\.",
+                "Please set up Dropbox integration first using `/setup_dropbox`\\.",
                 parse_mode=ParseMode.MARKDOWN_V2
             )
             return
@@ -1847,17 +1847,17 @@ Your server\. Fully automated\. Fully interactive\. Fully yours\.
                     await update.message.reply_text(
                         "🖥️ *Interactive Terminal Enabled*\n\n"
                         "✅ Terminal session started\n"
-                        "📝 Every message \= shell command\n"
+                        "📝 Every message \\= shell command\n"
                         "⌨️ *Input Commands Available:*\n"
-                        "• `/enter <text>` \- Send input \+ Enter\n"
-                        "• `/space` \- Send space key\n"
-                        "• `/ctrl_c` \- Send Ctrl\+C\n"
-                        "• `/input <text>` \- Send raw input\n\n"
+                        "• `/enter <text>` \\- Send input \\+ Enter\n"
+                        "• `/space` \\- Send space key\n"
+                        "• `/ctrl_c` \\- Send Ctrl\\+C\n"
+                        "• `/input <text>` \\- Send raw input\n\n"
                         "🎯 *Script Input Still Works:*\n"
                         "• `/sinput <script_id> <text>`\n"
                         "• `/pinput <pid> <text>`\n\n"
-                        "🚨 *Enhanced:* No more freezing issues\!\n"
-                        "Type `/terminal` again to disable\."
+                        "🚨 *Enhanced:* No more freezing issues\\!\n"
+                        "Type `/terminal` again to disable\\."
                     , parse_mode=ParseMode.MARKDOWN_V2)
                 else:
                     await update.message.reply_text(f"❌ *Failed to start terminal:* `{escape_markdown(message)}`", parse_mode=ParseMode.MARKDOWN_V2)
@@ -1877,7 +1877,7 @@ Your server\. Fully automated\. Fully interactive\. Fully yours\.
                 return
             
             if not context.args:
-                await update.message.reply_text("❌ *Please provide a command\.* Example: `/cmd ls \-la`", parse_mode=ParseMode.MARKDOWN_V2)
+                await update.message.reply_text("❌ *Please provide a command\\.* Example: `/cmd ls \\-la`", parse_mode=ParseMode.MARKDOWN_V2)
                 return
             
             command = ' '.join(context.args)
@@ -1913,7 +1913,7 @@ Your server\. Fully automated\. Fully interactive\. Fully yours\.
             if stdout:
                 output += stdout.decode('utf-8', errors='ignore')
             if stderr:
-                output += f"\n\-\-\- STDERR \-\-\-\n{stderr.decode('utf-8', errors='ignore')}"
+                output += f"\n\\-\\-\\- STDERR \\-\\-\\-\n{stderr.decode('utf-8', errors='ignore')}"
 
             if not output.strip():
                 output = "Command executed successfully (no output)."
@@ -1923,7 +1923,7 @@ Your server\. Fully automated\. Fully interactive\. Fully yours\.
 
             # Truncate output if too long
             if len(output) > 3800:
-                output = output[:3800] + "\n\n\.\.\. \(output truncated\)"
+                output = output[:3800] + "\n\n\\.\\.\\. \\(output truncated\\)"
 
             # Send as code block
             response_text += f"```\n{output}\n```"
@@ -1964,7 +1964,7 @@ Your server\. Fully automated\. Fully interactive\. Fully yours\.
             processes = processes[:20]  # Top 20
             
             if not processes:
-                text = "🔄 *No active processes found*\n\nThis may be due to system permission restrictions\."
+                text = "🔄 *No active processes found*\n\nThis may be due to system permission restrictions\\."
             else:
                 text = "🔄 *Top Running Processes:*\n\n"
                 for proc in processes:
@@ -1973,7 +1973,7 @@ Your server\. Fully automated\. Fully interactive\. Fully yours\.
                     name = proc.get('name', 'Unknown')
                     pid = proc.get('pid', 'Unknown')
                     text += f"• *PID* `{pid}`: `{escape_markdown(name)}`\n"
-                    text += f"  *CPU:* {escape_markdown(f'{cpu:.1f}%')} \| *RAM:* {escape_markdown(f'{mem:.1f}%')}\n\n"
+                    text += f"  *CPU:* {escape_markdown(f'{cpu:.1f}%')} \\| *RAM:* {escape_markdown(f'{mem:.1f}%')}\n\n"
             
             keyboard = [[InlineKeyboardButton("🔄 Refresh", callback_data="list_processes")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1995,13 +1995,13 @@ Your server\. Fully automated\. Fully interactive\. Fully yours\.
                 return
             
             if not context.args:
-                await update.message.reply_text("❌ *Please provide a PID\.* Example: `/kill 1234`", parse_mode=ParseMode.MARKDOWN_V2)
+                await update.message.reply_text("❌ *Please provide a PID\\.* Example: `/kill 1234`", parse_mode=ParseMode.MARKDOWN_V2)
                 return
             
             try:
                 pid = int(context.args[0])
             except ValueError:
-                await update.message.reply_text("❌ *Invalid PID\.* Please provide a number\.", parse_mode=ParseMode.MARKDOWN_V2)
+                await update.message.reply_text("❌ *Invalid PID\\.* Please provide a number\\.", parse_mode=ParseMode.MARKDOWN_V2)
                 return
             
             try:
@@ -2009,14 +2009,14 @@ Your server\. Fully automated\. Fully interactive\. Fully yours\.
                 process_name = process.name()
                 
                 process.terminate()
-                await update.message.reply_text(f"✅ *Process killed:* `{escape_markdown(process_name)}` \(`{pid}`\)", parse_mode=ParseMode.MARKDOWN_V2)
+                await update.message.reply_text(f"✅ *Process killed:* `{escape_markdown(process_name)}` \\(`{pid}`\\)", parse_mode=ParseMode.MARKDOWN_V2)
                 
             except psutil.NoSuchProcess:
-                await update.message.reply_text("❌ *Process not found\.*", parse_mode=ParseMode.MARKDOWN_V2)
+                await update.message.reply_text("❌ *Process not found\\.*", parse_mode=ParseMode.MARKDOWN_V2)
             except psutil.AccessDenied:
-                await update.message.reply_text("❌ *Access denied\.* Cannot kill this process \(insufficient permissions\)\.", parse_mode=ParseMode.MARKDOWN_V2)
+                await update.message.reply_text("❌ *Access denied\\.* Cannot kill this process \\(insufficient permissions\\)\\.", parse_mode=ParseMode.MARKDOWN_V2)
             except psutil.ZombieProcess:
-                await update.message.reply_text("❌ *Cannot kill zombie process\.*", parse_mode=ParseMode.MARKDOWN_V2)
+                await update.message.reply_text("❌ *Cannot kill zombie process\\.*", parse_mode=ParseMode.MARKDOWN_V2)
             except Exception as e:
                 await update.message.reply_text(f"❌ *Error killing process:* `{escape_markdown(str(e))}`", parse_mode=ParseMode.MARKDOWN_V2)
                 
@@ -2045,7 +2045,7 @@ Your server\. Fully automated\. Fully interactive\. Fully yours\.
                 script_type = 'javascript'
             else:
                 await processing_msg.edit_text(
-                    "❌ *Unsupported file type*\. Supported: `\.py`, `\.sh`, `\.js`",
+                    "❌ *Unsupported file type*\\. Supported: `\\.py`, `\\.sh`, `\\.js`",
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
                 return
@@ -2083,7 +2083,7 @@ Your server\. Fully automated\. Fully interactive\. Fully yours\.
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
-            success_text = f"""✅ *Script uploaded successfully\!*
+            success_text = f"""✅ *Script uploaded successfully\\!*
 
 📄 *File:* `{escape_markdown(file_name)}`
 🆔 *ID:* `{script_id}`
@@ -2091,7 +2091,7 @@ Your server\. Fully automated\. Fully interactive\. Fully yours\.
 📁 *Location:* `{escape_markdown(SCRIPTS_DIR)}`
 🎯 *Input Ready:* `/sinput {script_id} <text>`
 
-Ready to run\! 🚀"""
+Ready to run\\! 🚀"""
 
             await processing_msg.edit_text(success_text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -2127,7 +2127,7 @@ Ready to run\! 🚀"""
                         if output and output != "No output received":
                             # Truncate if too long
                             if len(output) > 4000:
-                                output = output[:4000] + "\n\n\.\.\. \(output truncated\)"
+                                output = output[:4000] + "\n\n\\.\\.\\. \\(output truncated\\)"
                             
                             await update.message.reply_text(f"```\n{output}\n```", parse_mode=ParseMode.MARKDOWN_V2)
                         else:
@@ -2209,31 +2209,31 @@ Ready to run\! 🚀"""
             help_text = """
 📤 *How to Upload Scripts*
 
-1\. *Supported File Types:*
-   • `\.py` \- Python scripts
-   • `\.sh` \- Shell/Bash scripts
-   • `\.js` \- JavaScript/Node\.js scripts
+1\\. *Supported File Types:*
+   • `\\.py` \\- Python scripts
+   • `\\.sh` \\- Shell/Bash scripts
+   • `\\.js` \\- JavaScript/Node\\.js scripts
 
-2\. *Upload Process:*
+2\\. *Upload Process:*
    • Send file as attachment
-   • Bot will auto\-detect script type
+   • Bot will auto\\-detect script type
    • Get instant management buttons
    • Start/stop with one click
 
-3\. *Enhanced Features:*
-   • Auto\-restart on crash
-   • Real\-time logs
+3\\. *Enhanced Features:*
+   • Auto\\-restart on crash
+   • Real\\-time logs
    • Background execution
-   • *Script\-specific input support*
+   • *Script\\-specific input support*
    • Process monitoring
 
-4\. *Interactive Script Support:*
+4\\. *Interactive Script Support:*
    • Upload interactive scripts
    • Use `/sinput <script_id> <input>` for passwords/prompts
    • Multiple scripts can run simultaneously
    • Independent from global terminal mode
 
-📎 *Ready to upload?* Just send your script file\!
+📎 *Ready to upload?* Just send your script file\\!
             """
             
             keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="list_scripts")]]
@@ -2263,11 +2263,11 @@ Your enhanced server management dashboard:
 • Monitor processes
 
 🎯 *Features:*
-• Script\-specific input commands
+• Script\\-specific input commands
 • Enhanced Start button reliability
-• Multi\-script interaction support
+• Multi\\-script interaction support
 
-🔒 *Security:* Admin\-only access active
+🔒 *Security:* Admin\\-only access active
 
 Choose an option below to get started:
             """
@@ -2295,12 +2295,12 @@ Choose an option below to get started:
             menu_text = """📦 *Backup Management*
 
 🔧 *Available Options:*
-• Export current bot data to a local backup file\.
-• Use `/importlink <url>` to restore from a backup\.
+• Export current bot data to a local backup file\\.
+• Use `/importlink <url>` to restore from a backup\\.
 
 ⚠️ *Important Notes:*
-• Restoring from a backup will replace ALL current data\.
-• A backup of the current state is created before restoration\.
+• Restoring from a backup will replace ALL current data\\.
+• A backup of the current state is created before restoration\\.
 
 Choose an option below:"""
             
@@ -2340,7 +2340,7 @@ Choose an option below:"""
 🆔 *ID:* `{script['id']}`
 🔧 *Type:* `{escape_markdown(script['script_type'])}`
 📊 *Status:* {escape_markdown(status_emoji)}
-🔄 *Auto\-restart:* {escape_markdown(auto_restart_status)}
+🔄 *Auto\\-restart:* {escape_markdown(auto_restart_status)}
 🎯 *Input Ready:* {escape_markdown(input_ready)}
 📈 *Restarts:* `{script.get('restart_count', 0)}`
             """
@@ -2389,7 +2389,7 @@ Choose an option below:"""
             
             # Validate script exists before attempting to start
             if script_id not in self.script_manager.scripts:
-                await query.edit_message_text("❌ *Script not found*\. Please refresh and try again\.", parse_mode=ParseMode.MARKDOWN_V2)
+                await query.edit_message_text("❌ *Script not found*\\. Please refresh and try again\\.", parse_mode=ParseMode.MARKDOWN_V2)
                 return
             
             script_info = self.script_manager.scripts[script_id]
@@ -2542,7 +2542,7 @@ Choose an option below:"""
             scripts = self.script_manager.list_scripts()
             
             if not scripts:
-                text = "📂 *No scripts found*\n\nUpload a `\.py`, `\.sh`, or `\.js` file to get started\!"
+                text = "📂 *No scripts found*\n\nUpload a `\\.py`, `\\.sh`, or `\\.js` file to get started\\!"
                 keyboard = [[InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")]]
             else:
                 text = "📂 *Your Enhanced Scripts:*\n\n"
@@ -2565,7 +2565,7 @@ Choose an option below:"""
                                            callback_data=f"manage_{script['id']}")
                     ])
                 
-                text += "🎯 \= Input Ready \| 🔄 \= Auto\-restart \| 🟢 \= Running\n"
+                text += "🎯 \\= Input Ready \\| 🔄 \\= Auto\\-restart \\| 🟢 \\= Running\n"
                 keyboard.append([InlineKeyboardButton("🔄 Refresh", callback_data="list_scripts")])
             
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -2592,13 +2592,13 @@ Choose an option below:"""
             
             try:
                 memory = psutil.virtual_memory()
-                status_parts.append(f"• *Memory:* {escape_markdown(f'{memory.percent}%')} \({escape_markdown(f'{memory.used // (1024**3)}GB / {memory.total // (1024**3)}GB')}\)")
+                status_parts.append(f"• *Memory:* {escape_markdown(f'{memory.percent}%')} \\({escape_markdown(f'{memory.used // (1024**3)}GB / {memory.total // (1024**3)}GB')}\\)")
             except Exception:
                 status_parts.append("• *Memory:* Unable to read")
             
             try:
                 disk = psutil.disk_usage('/')
-                status_parts.append(f"• *Disk:* {escape_markdown(f'{disk.percent}%')} \({escape_markdown(f'{disk.used // (1024**3)}GB / {disk.total // (1024**3)}GB')}\)")
+                status_parts.append(f"• *Disk:* {escape_markdown(f'{disk.percent}%')} \\({escape_markdown(f'{disk.used // (1024**3)}GB / {disk.total // (1024**3)}GB')}\\)")
             except Exception:
                 status_parts.append("• *Disk:* Unable to read")
                 
@@ -2675,17 +2675,17 @@ Choose an option below:"""
                     await query.edit_message_text(
                         "🖥️ *Interactive Terminal Enabled*\n\n"
                         "✅ Terminal session started\n"
-                        "📝 Every message \= shell command\n"
+                        "📝 Every message \\= shell command\n"
                         "⌨️ *Input Commands Available:*\n"
-                        "• `/enter <text>` \- Send input \+ Enter\n"
-                        "• `/space` \- Send space key\n"
-                        "• `/ctrl_c` \- Send Ctrl\+C\n"
-                        "• `/input <text>` \- Send raw input\n\n"
+                        "• `/enter <text>` \\- Send input \\+ Enter\n"
+                        "• `/space` \\- Send space key\n"
+                        "• `/ctrl_c` \\- Send Ctrl\\+C\n"
+                        "• `/input <text>` \\- Send raw input\n\n"
                         "🎯 *Script Input Still Works:*\n"
                         "• `/sinput <script_id> <text>`\n"
                         "• `/pinput <pid> <text>`\n\n"
-                        "🚨 *Enhanced:* No more freezing issues\!\n"
-                        "Type `/terminal` again to disable\."
+                        "🚨 *Enhanced:* No more freezing issues\\!\n"
+                        "Type `/terminal` again to disable\\."
                     , parse_mode=ParseMode.MARKDOWN_V2)
                 else:
                     await query.edit_message_text(f"❌ *Failed to start terminal:* `{escape_markdown(message)}`", parse_mode=ParseMode.MARKDOWN_V2)
@@ -2718,7 +2718,7 @@ Choose an option below:"""
             processes = processes[:20]  # Top 20
             
             if not processes:
-                text = "🔄 *No active processes found*\n\nThis may be due to system permission restrictions\."
+                text = "🔄 *No active processes found*\n\nThis may be due to system permission restrictions\\."
             else:
                 text = "🔄 *Top Running Processes:*\n\n"
                 for proc in processes:
@@ -2727,7 +2727,7 @@ Choose an option below:"""
                     name = proc.get('name', 'Unknown')
                     pid = proc.get('pid', 'Unknown')
                     text += f"• *PID* `{pid}`: `{escape_markdown(name)}`\n"
-                    text += f"  *CPU:* {escape_markdown(f'{cpu:.1f}%')} \| *RAM:* {escape_markdown(f'{mem:.1f}%')}\n\n"
+                    text += f"  *CPU:* {escape_markdown(f'{cpu:.1f}%')} \\| *RAM:* {escape_markdown(f'{mem:.1f}%')}\n\n"
             
             keyboard = [[InlineKeyboardButton("🔄 Refresh", callback_data="list_processes")]]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -2746,7 +2746,7 @@ Choose an option below:"""
         if not self.script_manager.get_dropbox_client():
             await query.edit_message_text(
                 "❌ *Dropbox Not Configured*\n"
-                "Run `/setup_dropbox` and `/dropbox_code` first\.",
+                "Run `/setup_dropbox` and `/dropbox_code` first\\.",
                 parse_mode=ParseMode.MARKDOWN_V2
             )
             await query.answer()
@@ -2815,10 +2815,10 @@ Choose an option below:"""
 
         message = (
             "✅ *Dropbox Setup Initiated*\n\n"
-            "1\. *Authorize the bot* by visiting this URL:\n"
+            "1\\. *Authorize the bot* by visiting this URL:\n"
             f"   [Dropbox Authorization Link]({auth_url})\n\n"
-            "2\. *Grant access* and copy the authorization code provided\.\n\n"
-            "3\. *Send the code* back to the bot using the command:\n"
+            "2\\. *Grant access* and copy the authorization code provided\\.\n\n"
+            "3\\. *Send the code* back to the bot using the command:\n"
             "   `/dropbox_code <YOUR_CODE>`"
         )
         await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
@@ -2839,7 +2839,7 @@ Choose an option below:"""
         app_secret = config.get("app_secret")
 
         if not app_key or not app_secret:
-            await update.message.reply_text("❌ *App key/secret not found\.* Please run `/setup_dropbox` first\.", parse_mode=ParseMode.MARKDOWN_V2)
+            await update.message.reply_text("❌ *App key/secret not found\\.* Please run `/setup_dropbox` first\\.", parse_mode=ParseMode.MARKDOWN_V2)
             return
 
         try:
@@ -2854,10 +2854,11 @@ Choose an option below:"""
             })
             self.script_manager.save_dropbox_config()
 
-            await update.message.reply_text("✅ *Dropbox authentication successful\!*\nThe bot is now authorized to upload backups\.", parse_mode=ParseMode.MARKDOWN_V2)
+            await update.message.reply_text("✅ *Dropbox authentication successful\\!*\\nThe bot is now authorized to upload backups\\.", parse_mode=ParseMode.MARKDOWN_V2)
         except Exception as e:
             logger.error(f"Dropbox code exchange failed: {e}")
-            await update.message.reply_text(f"❌ *Authentication Failed:*\n`{escape_markdown(str(e))}`\nPlease try the setup process again\.", parse_mode=ParseMode.MARKDOWN_V2)
+            await update.message.reply_text(f"❌ *Authentication Failed:*\n`{escape_markdown(str(e))}`\n"
+                                          f"Please try the setup process again\\.", parse_mode=ParseMode.MARKDOWN_V2)
 
     async def dropbox_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Displays the status of the Dropbox integration."""
