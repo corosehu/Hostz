@@ -1429,9 +1429,9 @@ class TelegramBot:
             restore_success, restore_message = await asyncio.to_thread(_restore_blocking_part)
 
             if restore_success:
-                await processing_msg.edit_text(f"✅ *Backup Restored\\!**\n\n{escape_markdown(restore_message)}", parse_mode=ParseMode.MARKDOWN_V2)
+                await processing_msg.edit_text(f"✅ *Backup Restored\\!*\n\n{escape_markdown(restore_message)}", parse_mode=ParseMode.MARKDOWN_V2)
             else:
-                await processing_msg.edit_text(f"❌ *Restore Failed:**\n\n{escape_markdown(restore_message)}", parse_mode=ParseMode.MARKDOWN_V2)
+                await processing_msg.edit_text(f"❌ *Restore Failed:*\n\n{escape_markdown(restore_message)}", parse_mode=ParseMode.MARKDOWN_V2)
 
         except httpx.RequestError as e:
             await processing_msg.edit_text(f"❌ *Download Failed:* {escape_markdown(str(e))}", parse_mode=ParseMode.MARKDOWN_V2)
