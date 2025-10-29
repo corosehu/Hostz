@@ -77,6 +77,8 @@ import dropbox
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
+import functools
+import telegram
 
 try:
     from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
@@ -1121,6 +1123,22 @@ def escape_markdown(text: str) -> str:
     return "".join(f"\\{char}" if char in escape_chars else char for char in text)
 
 
+def resilient_api_call(func):
+    """Decorator to retry Telegram API calls on network errors."""
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        for attempt in range(3):
+            try:
+                return await func(*args, **kwargs)
+            except telegram.error.NetworkError as e:
+                if attempt == 2:
+                    logger.error(f"Telegram API call failed after 3 attempts: {e}")
+                    raise
+                logger.warning(f"Network error in {func.__name__}, attempt {attempt + 1}: {e}. Retrying...")
+                await asyncio.sleep(1)
+    return wrapper
+
+
 class TelegramBot:
     def __init__(self):
         # Unify Application instance creation in __init__
@@ -1131,6 +1149,7 @@ class TelegramBot:
         """Check if user is admin"""
         return user_id in ADMIN_IDS
 
+    @resilient_api_call
     async def unauthorized_response(self, update: Update):
         """Send unauthorized response"""
         await update.message.reply_text("🚫 Unauthorized access. Contact admin.")
@@ -1140,6 +1159,7 @@ class TelegramBot:
         """Log the error and send a telegram message to notify the developer."""
         logger.error("Exception while handling an update:", exc_info=context.error)
 
+    @resilient_api_call
     async def send_script_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Send input to a specific script"""
         try:
@@ -1169,6 +1189,7 @@ class TelegramBot:
             logger.error(f"Error in send_script_input: {e}")
             await update.message.reply_text(f"❌ *Error sending input:* `{escape_markdown(str(e))}`", parse_mode=ParseMode.MARKDOWN_V2)
 
+    @resilient_api_call
     async def send_pid_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Send input to a script by PID"""
         try:
@@ -1203,6 +1224,7 @@ class TelegramBot:
             logger.error(f"Error in send_pid_input: {e}")
             await update.message.reply_text(f"❌ *Error sending input:* `{escape_markdown(str(e))}`", parse_mode=ParseMode.MARKDOWN_V2)
 
+    @resilient_api_call
     async def send_enter_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Send input with Enter key to terminal"""
         try:
@@ -1243,6 +1265,7 @@ class TelegramBot:
             logger.error(f"Error in send_enter_input: {e}")
             await update.message.reply_text(f"❌ *Error sending input:* `{escape_markdown(str(e))}`", parse_mode=ParseMode.MARKDOWN_V2)
 
+    @resilient_api_call
     async def send_space(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Send space key to terminal"""
         try:
@@ -1267,6 +1290,7 @@ class TelegramBot:
             logger.error(f"Error in send_space: {e}")
             await update.message.reply_text(f"❌ *Error:* `{escape_markdown(str(e))}`", parse_mode=ParseMode.MARKDOWN_V2)
 
+    @resilient_api_call
     async def send_ctrl_c(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Send Ctrl+C to terminal"""
         try:
@@ -1297,6 +1321,7 @@ class TelegramBot:
             logger.error(f"Error in send_ctrl_c: {e}")
             await update.message.reply_text(f"❌ *Error:* `{escape_markdown(str(e))}`", parse_mode=ParseMode.MARKDOWN_V2)
 
+    @resilient_api_call
     async def send_raw_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Send raw input without Enter to terminal"""
         try:
@@ -1326,6 +1351,7 @@ class TelegramBot:
             logger.error(f"Error in send_raw_input: {e}")
             await update.message.reply_text(f"❌ *Error:* `{escape_markdown(str(e))}`", parse_mode=ParseMode.MARKDOWN_V2)
 
+    @resilient_api_call
     async def test_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Simple test command to verify bot is working"""
         try:
@@ -1345,6 +1371,7 @@ class TelegramBot:
             except:
                 pass
 
+    @resilient_api_call
     async def import_from_link(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Import a backup from a direct download link without blocking."""
         if not self.is_admin(update.effective_user.id):
@@ -1413,6 +1440,7 @@ class TelegramBot:
             if temp_file_path and os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
 
+    @resilient_api_call
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Start command handler"""
         try:
@@ -1482,6 +1510,7 @@ Your enhanced server is ready\! 🎯
             except:
                 pass
 
+    @resilient_api_call
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Help command handler"""
         try:
@@ -1603,6 +1632,7 @@ Your server\\. Fully automated\\. Fully interactive\\. Fully yours\\.
             except:
                 pass
 
+    @resilient_api_call
     async def server_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Get comprehensive server status"""
         try:
@@ -1712,6 +1742,7 @@ Your server\\. Fully automated\\. Fully interactive\\. Fully yours\\.
             except:
                 pass
 
+    @resilient_api_call
     async def list_scripts(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """List all managed scripts"""
         try:
@@ -1771,6 +1802,7 @@ Your server\\. Fully automated\\. Fully interactive\\. Fully yours\\.
             except:
                 pass
 
+    @resilient_api_call
     async def export_backup(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Create and send manual backup, with a pre-check for Dropbox config."""
         if not self.is_admin(update.effective_user.id):
@@ -1811,6 +1843,7 @@ Your server\\. Fully automated\\. Fully interactive\\. Fully yours\\.
             await update.message.reply_text(f"❌ *An unexpected error occurred:* `{escape_markdown(str(e))}`", parse_mode=ParseMode.MARKDOWN_V2)
 
 
+    @resilient_api_call
     async def toggle_terminal(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Toggle enhanced interactive terminal mode"""
         try:
@@ -1869,6 +1902,7 @@ Your server\\. Fully automated\\. Fully interactive\\. Fully yours\\.
             except:
                 pass
 
+    @resilient_api_call
     async def execute_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Execute a shell command - ENHANCED NON-FREEZING VERSION"""
         try:
@@ -1939,6 +1973,7 @@ Your server\\. Fully automated\\. Fully interactive\\. Fully yours\\.
             logger.error(f"Error in run_shell_command_safe: {e}")
             await update.message.reply_text(f"❌ *Command execution failed:* `{escape_markdown(str(e))}`", parse_mode=ParseMode.MARKDOWN_V2)
 
+    @resilient_api_call
     async def list_processes(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """List running processes"""
         try:
@@ -1987,6 +2022,7 @@ Your server\\. Fully automated\\. Fully interactive\\. Fully yours\\.
             except:
                 pass
 
+    @resilient_api_call
     async def kill_process(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Kill a process by PID"""
         try:
@@ -2024,6 +2060,7 @@ Your server\\. Fully automated\\. Fully interactive\\. Fully yours\\.
             logger.error(f"Error in kill_process: {e}")
             await update.message.reply_text(f"❌ *Error killing process:* `{escape_markdown(str(e))}`", parse_mode=ParseMode.MARKDOWN_V2)
 
+    @resilient_api_call
     async def handle_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle file uploads without blocking the event loop."""
         try:
@@ -2103,6 +2140,7 @@ Ready to run\\! 🚀"""
                 pass
 
 
+    @resilient_api_call
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle text messages - ENHANCED TERMINAL MODE"""
         try:
@@ -2150,6 +2188,7 @@ Ready to run\\! 🚀"""
             except:
                 pass
 
+    @resilient_api_call
     async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle inline keyboard callbacks"""
         try:
@@ -2785,6 +2824,7 @@ Choose an option below:"""
             )
 
 
+    @resilient_api_call
     async def setup_dropbox(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Command to set up Dropbox OAuth credentials."""
         if not self.is_admin(update.effective_user.id):
@@ -2823,6 +2863,7 @@ Choose an option below:"""
         )
         await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
 
+    @resilient_api_call
     async def dropbox_code_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Command to handle the Dropbox authorization code."""
         if not self.is_admin(update.effective_user.id):
@@ -2860,6 +2901,7 @@ Choose an option below:"""
             await update.message.reply_text(f"❌ *Authentication Failed:*\n`{escape_markdown(str(e))}`\n"
                                           f"Please try the setup process again\\.", parse_mode=ParseMode.MARKDOWN_V2)
 
+    @resilient_api_call
     async def dropbox_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Displays the status of the Dropbox integration."""
         if not self.is_admin(update.effective_user.id):
