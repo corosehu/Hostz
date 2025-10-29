@@ -168,12 +168,19 @@ class ScriptManager:
 
     def load_dropbox_config(self) -> Dict:
         """Loads Dropbox config from a JSON file."""
+        config_path = Path(DROPBOX_CONFIG_FILE)
+        if not config_path.exists():
+            logger.info("Dropbox config file not found.")
+            return {}
         try:
-            if Path(DROPBOX_CONFIG_FILE).exists():
-                with Path(DROPBOX_CONFIG_FILE).open('r') as f:
-                    return json.load(f)
+            with config_path.open('r') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            logger.error(f"Error: Dropbox config file at '{config_path}' is not a valid JSON.")
+        except PermissionError:
+            logger.error(f"Error: Permission denied when reading '{config_path}'.")
         except Exception as e:
-            logger.error(f"Error loading Dropbox config: {e}")
+            logger.error(f"An unexpected error occurred while loading Dropbox config: {e}")
         return {}
 
     def save_dropbox_config(self):
@@ -390,27 +397,35 @@ class ScriptManager:
     def get_dropbox_client(self) -> Optional[dropbox.Dropbox]:
         """Creates a Dropbox client, refreshing the token if necessary."""
         config = self.dropbox_config
-        if not all(k in config and config[k] for k in ["app_key", "app_secret", "refresh_token"]):
-            logger.warning("Dropbox not configured. Run /setup_dropbox and /dropbox_code first.")
+        required_keys = ["app_key", "app_secret", "refresh_token"]
+        missing_keys = [key for key in required_keys if not config.get(key)]
+        if missing_keys:
+            logger.error(f"Dropbox is not configured. Missing required keys: {', '.join(missing_keys)}. Please use /setup_dropbox.")
             return None
 
-        # Check if the token is expired or close to expiring
         if time.time() >= config.get("expires_at", 0) - 60:
-            logger.info("Dropbox token expired or expiring soon. Refreshing...")
+            logger.info("Dropbox access token has expired or is about to. Refreshing...")
             try:
                 with dropbox.Dropbox(
                     app_key=config["app_key"],
                     app_secret=config["app_secret"],
-                    oauth2_refresh_token=config["refresh_token"]
+                    oauth2_refresh_token=config["refresh_token"],
                 ) as dbx:
                     dbx.refresh_access_token()
                     config["access_token"] = dbx.oauth2_access_token
                     config["expires_at"] = time.time() + dbx.oauth2_access_token_expiration
                     self.save_dropbox_config()
                     logger.info("✅ Dropbox token refreshed successfully.")
-            except Exception as e:
-                logger.error(f"❌ Failed to refresh Dropbox token: {e}")
+            except dropbox.exceptions.AuthError as e:
+                logger.error(f"❌ Dropbox token refresh failed with an authentication error: {e}. The refresh token may be invalid or revoked. Please re-authorize with /setup_dropbox.")
                 return None
+            except Exception as e:
+                logger.error(f"❌ An unexpected error occurred while refreshing the Dropbox token: {e}", exc_info=True)
+                return None
+
+        if not config.get("access_token"):
+            logger.error("Dropbox access token is missing. Cannot create client.")
+            return None
 
         return dropbox.Dropbox(config["access_token"])
 
@@ -422,35 +437,47 @@ class ScriptManager:
         message_id: int = None,
     ):
         """Uploads a backup file to Dropbox and notifies the admin."""
-        dbx = self.get_dropbox_client()
-        if not dbx:
-            success = False
-            result = "Dropbox not configured or token refresh failed."
-        else:
-            backup_path = Path(backup_path_str)
-            dropbox_path = f"/BotBackups/{backup_path.name}"
-            try:
+        # Get a descriptive error message if the client fails to initialize
+        try:
+            dbx = self.get_dropbox_client()
+            if not dbx:
+                # Check config for a more specific error
+                config = self.dropbox_config
+                required_keys = ["app_key", "app_secret", "refresh_token"]
+                missing_keys = [key for key in required_keys if not config.get(key)]
+                if missing_keys:
+                    error_reason = f"Missing config keys: {', '.join(missing_keys)}"
+                else:
+                    error_reason = "Token refresh failed. Check logs for details."
+
+                success = False
+                result = f"Dropbox client initialization failed. Reason: {error_reason}"
+            else:
+                # Proceed with upload
+                backup_path = Path(backup_path_str)
+                dropbox_path = f"/BotBackups/{backup_path.name}"
                 with backup_path.open("rb") as f:
                     dbx.files_upload(f.read(), dropbox_path, mode=dropbox.files.WriteMode('overwrite'))
 
                 link = dbx.sharing_create_shared_link_with_settings(dropbox_path)
                 success = True
                 result = link.url.replace("?dl=0", "?dl=1")
-            except dropbox.exceptions.ApiError as e:
-                if e.error.is_shared_link_already_exists():
-                    links = dbx.sharing_list_shared_links(path=dropbox_path).links
-                    if links:
-                        success = True
-                        result = links[0].url.replace("?dl=0", "?dl=1")
-                    else:
-                        success = False
-                        result = "Failed to get existing shared link."
+
+        except dropbox.exceptions.ApiError as e:
+            if e.error.is_shared_link_already_exists():
+                links = dbx.sharing_list_shared_links(path=dropbox_path).links
+                if links:
+                    success = True
+                    result = links[0].url.replace("?dl=0", "?dl=1")
                 else:
                     success = False
-                    result = str(e)
-            except Exception as e:
+                    result = "Failed to retrieve existing shared link."
+            else:
                 success = False
-                result = str(e)
+                result = f"Dropbox API error: {e}"
+        except Exception as e:
+            success = False
+            result = f"An unexpected error occurred: {e}"
 
         backup_path = Path(backup_path_str)
         if success:
@@ -1030,6 +1057,60 @@ class ScriptManager:
         except Exception as e:
             logger.error(f"Error reading PTY output: {e}")
             return f"Error reading output: {str(e)}"
+
+    def get_dropbox_status(self) -> str:
+        """Checks the Dropbox configuration and returns a status message."""
+        status = ["*🔍 Dropbox Integration Status*"]
+        config_path = Path(DROPBOX_CONFIG_FILE)
+
+        # 1. Check for config file existence and permissions
+        if not config_path.exists():
+            status.append("  - ❌ *Config File:* Not found at `dropbox_config.json`.")
+            return "\n".join(status)
+
+        status.append(f"  - ✅ *Config File:* Found at `{escape_markdown(str(config_path))}`.")
+
+        try:
+            # This will trigger a read and catch permission errors
+            config = self.load_dropbox_config()
+            if not config: # Handles JSON error or other read issues
+                 status.append("  - ❌ *Config Access:* Could not be read. Check logs for permission or JSON format errors.")
+                 return "\n".join(status)
+
+        except Exception as e:
+            status.append(f"  - ❌ *Config Access:* An unexpected error occurred: {e}")
+            return "\n".join(status)
+
+        # 2. Check for required fields
+        required_keys = ["app_key", "app_secret", "refresh_token"]
+        missing_keys = [key for key in required_keys if not config.get(key)]
+
+        if missing_keys:
+            status.append(f"  - ❌ *Required Fields:* Missing `{', '.join(missing_keys)}`.")
+        else:
+            status.append("  - ✅ *Required Fields:* All present (app_key, app_secret, refresh_token).")
+
+        # 3. Check token status
+        if not config.get("refresh_token"):
+            status.append("  - 🟡 *Token Status:* Needs setup. Use `/setup_dropbox`.")
+        elif time.time() >= config.get("expires_at", 0) - 60:
+            status.append("  - 🟡 *Token Status:* Expired. Will attempt refresh on next backup.")
+        else:
+            expires_in = timedelta(seconds=int(config.get("expires_at", 0) - time.time()))
+            status.append(f"  - ✅ *Token Status:* Access token is valid (expires in {expires_in}).")
+
+        # 4. Attempt to connect to Dropbox
+        try:
+            dbx = self.get_dropbox_client()
+            if dbx:
+                dbx.users_get_current_account()
+                status.append("  - ✅ *API Connection:* Successfully connected to Dropbox API.")
+            else:
+                status.append("  - ❌ *API Connection:* Failed to initialize Dropbox client. Check logs.")
+        except Exception as e:
+            status.append(f"  - ❌ *API Connection:* Failed with error: `{escape_markdown(str(e))}`.")
+
+        return "\n".join(status)
 
 
 def escape_markdown(text: str) -> str:
@@ -2778,6 +2859,15 @@ Choose an option below:"""
             logger.error(f"Dropbox code exchange failed: {e}")
             await update.message.reply_text(f"❌ *Authentication Failed:*\n`{escape_markdown(str(e))}`\nPlease try the setup process again\.", parse_mode=ParseMode.MARKDOWN_V2)
 
+    async def dropbox_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Displays the status of the Dropbox integration."""
+        if not self.is_admin(update.effective_user.id):
+            await self.unauthorized_response(update)
+            return
+
+        status_message = self.script_manager.get_dropbox_status()
+        await update.message.reply_text(status_message, parse_mode=ParseMode.MARKDOWN_V2)
+
     def run(self):
         """Run the bot"""
         try:
@@ -2805,6 +2895,7 @@ Choose an option below:"""
             self.application.add_handler(CommandHandler("test", self.test_command))
             self.application.add_handler(CommandHandler("setup_dropbox", self.setup_dropbox))
             self.application.add_handler(CommandHandler("dropbox_code", self.dropbox_code_handler))
+            self.application.add_handler(CommandHandler("dropbox_status", self.dropbox_status))
             self.application.add_handler(MessageHandler(filters.Document.ALL, self.handle_document))
             self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
             self.application.add_handler(CallbackQueryHandler(self.button_callback))
