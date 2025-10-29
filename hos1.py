@@ -1065,20 +1065,20 @@ class ScriptManager:
 
         # 1. Check for config file existence and permissions
         if not config_path.exists():
-            status.append("  - ❌ *Config File:* Not found at `dropbox_config.json`.")
+            status.append("  \\- ❌ *Config File:* Not found at `dropbox_config.json`.")
             return "\n".join(status)
 
-        status.append(f"  - ✅ *Config File:* Found at `{escape_markdown(str(config_path))}`.")
+        status.append(f"  \\- ✅ *Config File:* Found at `{escape_markdown(str(config_path))}`.")
 
         try:
             # This will trigger a read and catch permission errors
             config = self.load_dropbox_config()
             if not config: # Handles JSON error or other read issues
-                 status.append("  - ❌ *Config Access:* Could not be read. Check logs for permission or JSON format errors.")
+                 status.append("  \\- ❌ *Config Access:* Could not be read. Check logs for permission or JSON format errors.")
                  return "\n".join(status)
 
         except Exception as e:
-            status.append(f"  - ❌ *Config Access:* An unexpected error occurred: {e}")
+            status.append(f"  \\- ❌ *Config Access:* An unexpected error occurred: {e}")
             return "\n".join(status)
 
         # 2. Check for required fields
@@ -1086,29 +1086,29 @@ class ScriptManager:
         missing_keys = [key for key in required_keys if not config.get(key)]
 
         if missing_keys:
-            status.append(f"  - ❌ *Required Fields:* Missing `{', '.join(missing_keys)}`.")
+            status.append(f"  \\- ❌ *Required Fields:* Missing `{', '.join(missing_keys)}`.")
         else:
-            status.append("  - ✅ *Required Fields:* All present (app_key, app_secret, refresh_token).")
+            status.append("  \\- ✅ *Required Fields:* All present (app_key, app_secret, refresh_token).")
 
         # 3. Check token status
         if not config.get("refresh_token"):
-            status.append("  - 🟡 *Token Status:* Needs setup. Use `/setup_dropbox`.")
+            status.append("  \\- 🟡 *Token Status:* Needs setup. Use `/setup_dropbox`.")
         elif time.time() >= config.get("expires_at", 0) - 60:
-            status.append("  - 🟡 *Token Status:* Expired. Will attempt refresh on next backup.")
+            status.append("  \\- 🟡 *Token Status:* Expired. Will attempt refresh on next backup.")
         else:
             expires_in = timedelta(seconds=int(config.get("expires_at", 0) - time.time()))
-            status.append(f"  - ✅ *Token Status:* Access token is valid (expires in {expires_in}).")
+            status.append(f"  \\- ✅ *Token Status:* Access token is valid (expires in {expires_in}).")
 
         # 4. Attempt to connect to Dropbox
         try:
             dbx = self.get_dropbox_client()
             if dbx:
                 dbx.users_get_current_account()
-                status.append("  - ✅ *API Connection:* Successfully connected to Dropbox API.")
+                status.append("  \\- ✅ *API Connection:* Successfully connected to Dropbox API.")
             else:
-                status.append("  - ❌ *API Connection:* Failed to initialize Dropbox client. Check logs.")
+                status.append("  \\- ❌ *API Connection:* Failed to initialize Dropbox client. Check logs.")
         except Exception as e:
-            status.append(f"  - ❌ *API Connection:* Failed with error: `{escape_markdown(str(e))}`.")
+            status.append(f"  \\- ❌ *API Connection:* Failed with error: `{escape_markdown(str(e))}`.")
 
         return "\n".join(status)
 
@@ -2869,44 +2869,46 @@ Choose an option below:"""
         await update.message.reply_text(status_message, parse_mode=ParseMode.MARKDOWN_V2)
 
     def run(self):
-        """Run the bot"""
-        try:
-            # The application is already built in __init__.
-            # Add error handler to the existing application instance.
-            self.application.add_error_handler(self.error_handler)
-            
-            # Add handlers
-            self.application.add_handler(CommandHandler("start", self.start))
-            self.application.add_handler(CommandHandler("help", self.help_command))
-            self.application.add_handler(CommandHandler("status", self.server_status))
-            self.application.add_handler(CommandHandler("scripts", self.list_scripts))
-            self.application.add_handler(CommandHandler("cmd", self.execute_command))
-            self.application.add_handler(CommandHandler("ps", self.list_processes))
-            self.application.add_handler(CommandHandler("kill", self.kill_process))
-            self.application.add_handler(CommandHandler("sinput", self.send_script_input))
-            self.application.add_handler(CommandHandler("pinput", self.send_pid_input))
-            self.application.add_handler(CommandHandler("enter", self.send_enter_input))
-            self.application.add_handler(CommandHandler("space", self.send_space))
-            self.application.add_handler(CommandHandler("ctrl_c", self.send_ctrl_c))
-            self.application.add_handler(CommandHandler("input", self.send_raw_input))
-            self.application.add_handler(CommandHandler("terminal", self.toggle_terminal))
-            self.application.add_handler(CommandHandler("export", self.export_backup))
-            self.application.add_handler(CommandHandler("importlink", self.import_from_link))
-            self.application.add_handler(CommandHandler("test", self.test_command))
-            self.application.add_handler(CommandHandler("setup_dropbox", self.setup_dropbox))
-            self.application.add_handler(CommandHandler("dropbox_code", self.dropbox_code_handler))
-            self.application.add_handler(CommandHandler("dropbox_status", self.dropbox_status))
-            self.application.add_handler(MessageHandler(filters.Document.ALL, self.handle_document))
-            self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
-            self.application.add_handler(CallbackQueryHandler(self.button_callback))
-            
-            logger.info("🚀 Enhanced Advanced Hosting Bot Started!")
-            
-            # Run the bot
-            self.application.run_polling(drop_pending_updates=True)
-            
-        except Exception as e:
-            logger.error(f"❌ Error starting bot: {e}")
+        """Run the bot with automatic restart on network errors."""
+        self.application.add_error_handler(self.error_handler)
+
+        # Add handlers
+        self.application.add_handler(CommandHandler("start", self.start))
+        self.application.add_handler(CommandHandler("help", self.help_command))
+        self.application.add_handler(CommandHandler("status", self.server_status))
+        self.application.add_handler(CommandHandler("scripts", self.list_scripts))
+        self.application.add_handler(CommandHandler("cmd", self.execute_command))
+        self.application.add_handler(CommandHandler("ps", self.list_processes))
+        self.application.add_handler(CommandHandler("kill", self.kill_process))
+        self.application.add_handler(CommandHandler("sinput", self.send_script_input))
+        self.application.add_handler(CommandHandler("pinput", self.send_pid_input))
+        self.application.add_handler(CommandHandler("enter", self.send_enter_input))
+        self.application.add_handler(CommandHandler("space", self.send_space))
+        self.application.add_handler(CommandHandler("ctrl_c", self.send_ctrl_c))
+        self.application.add_handler(CommandHandler("input", self.send_raw_input))
+        self.application.add_handler(CommandHandler("terminal", self.toggle_terminal))
+        self.application.add_handler(CommandHandler("export", self.export_backup))
+        self.application.add_handler(CommandHandler("importlink", self.import_from_link))
+        self.application.add_handler(CommandHandler("test", self.test_command))
+        self.application.add_handler(CommandHandler("setup_dropbox", self.setup_dropbox))
+        self.application.add_handler(CommandHandler("dropbox_code", self.dropbox_code_handler))
+        self.application.add_handler(CommandHandler("dropbox_status", self.dropbox_status))
+        self.application.add_handler(MessageHandler(filters.Document.ALL, self.handle_document))
+        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
+        self.application.add_handler(CallbackQueryHandler(self.button_callback))
+
+        logger.info("🚀 Enhanced Advanced Hosting Bot Started!")
+
+        while True:
+            try:
+                # Run the bot
+                self.application.run_polling(drop_pending_updates=True)
+            except telegram.error.NetworkError as e:
+                logger.error(f"🔌 Network error encountered: {e}. Restarting polling in 5 seconds...")
+                time.sleep(5)
+            except Exception as e:
+                logger.error(f"❌ An unexpected error occurred: {e}. Restarting in 15 seconds...")
+                time.sleep(15)
 
 def main():
     """Main function"""
