@@ -1097,7 +1097,7 @@ class ScriptManager:
             status.append("  \\- 🟡 *Token Status:* Expired\\. Will attempt refresh on next backup\\.")
         else:
             expires_in = timedelta(seconds=int(config.get("expires_at", 0) - time.time()))
-            status.append(f"  \\- ✅ *Token Status:* Access token is valid (expires in {expires_in})\\.")
+            status.append(f"  \\- ✅ *Token Status:* Access token is valid \\(expires in {expires_in}\\)\\.")
 
         # 4. Attempt to connect to Dropbox
         try:
@@ -2365,7 +2365,7 @@ Choose an option below:"""
             
             keyboard.append([InlineKeyboardButton("📋 View Logs", callback_data=f"logs_{script_id}")])
             
-            auto_text = "Disable Auto-restart" if script.get('auto_restart', False) else "Enable Auto-restart"
+            auto_text = "Disable Auto\\-restart" if script.get('auto_restart', False) else "Enable Auto\\-restart"
             keyboard.append([InlineKeyboardButton(f"🔄 {auto_text}", callback_data=f"toggle_auto_{script_id}")])
             
             keyboard.append([InlineKeyboardButton("🗑️ Delete Script", callback_data=f"delete_{script_id}")])
@@ -2474,7 +2474,7 @@ Choose an option below:"""
             logs = self.script_manager.get_script_logs(script_id)
             
             if len(logs) > 4000:
-                logs = logs[-4000:] + "\n\n... (truncated)"
+                logs = logs[-4000:] + "\n\n\\.\\.\\. \\(truncated\\)"
             
             script = next((s for s in self.script_manager.list_scripts() if s['id'] == script_id), None)
             script_name = script['original_name'] if script else script_id
@@ -2905,10 +2905,10 @@ Choose an option below:"""
                 # Run the bot
                 self.application.run_polling(drop_pending_updates=True)
             except telegram.error.NetworkError as e:
-                logger.error(f"🔌 Network error encountered: {e}. Restarting polling in 5 seconds...")
+                logger.error(f"🔌 Network error encountered: {e}. Attempting to reconnect in 5 seconds...")
                 time.sleep(5)
             except Exception as e:
-                logger.error(f"❌ An unexpected error occurred: {e}. Restarting in 15 seconds...")
+                logger.error(f"❌ An unexpected error occurred in the main loop: {e}. Restarting in 15 seconds...")
                 time.sleep(15)
 
 def main():
