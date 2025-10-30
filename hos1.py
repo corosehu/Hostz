@@ -74,7 +74,7 @@ import pty
 import fcntl
 import select
 import dropbox
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 import functools
@@ -442,7 +442,9 @@ class ScriptManager:
             )
             dbx.refresh_access_token()
             config["access_token"] = dbx._oauth2_access_token
-            config["expires_at"] = time.time() + dbx._oauth2_access_token_expiration
+            # Convert the datetime object to a UTC timestamp before adding it to the current time
+            expiration_timestamp = dbx._oauth2_access_token_expiration.replace(tzinfo=timezone.utc).timestamp()
+            config["expires_at"] = expiration_timestamp
             self.save_dropbox_config()
             logger.info("Dropbox token refreshed successfully.")
             return True, "Token refreshed successfully."
@@ -468,7 +470,7 @@ class ScriptManager:
             # Provide a user-friendly error message
             if "not configured" in message:
                  return False, "❌ Dropbox not configured. Run `/setup_dropbox` and `/dropbox_code` first."
-            return False, f"❌ Failed to refresh Dropbox token: {message}"
+            return False, f"❌ Failed to refresh Dropbox token: {escape_markdown(message)}"
 
     def upload_to_dropbox(
         self,
