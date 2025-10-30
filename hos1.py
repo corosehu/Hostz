@@ -159,6 +159,7 @@ class ScriptManager:
         self.terminal_sessions: Dict[int, Dict] = {}
         self.interactive_processes: Dict[int, subprocess.Popen] = {}
         self.backup_thread = None
+        self.dropbox_refresh_thread = None
         self.last_backup_time = None
         self._data_lock = threading.Lock()  # Lock for thread-safe data saving
         self.dropbox_config = self.load_dropbox_config()
@@ -167,6 +168,7 @@ class ScriptManager:
         self.monitor_thread = threading.Thread(target=self.monitor_processes, daemon=True)
         self.monitor_thread.start()
         self.start_backup_scheduler()
+        self.start_dropbox_token_refresh_scheduler()
 
     def load_dropbox_config(self) -> Dict:
         """Loads Dropbox config from a JSON file."""
@@ -323,6 +325,25 @@ class ScriptManager:
         self.backup_thread = threading.Thread(target=backup_scheduler, daemon=True)
         self.backup_thread.start()
         logger.info("📅 Automatic backup scheduler started")
+
+    def start_dropbox_token_refresh_scheduler(self):
+        """Start the automatic Dropbox token refresh scheduler."""
+        def token_refresh_scheduler():
+            while True:
+                try:
+                    if self.dropbox_config and self.dropbox_config.get("refresh_token"):
+                        logger.info("Performing scheduled Dropbox token refresh.")
+                        self._refresh_dropbox_token()
+                    # Wait 2.5 hours before the next check
+                    time.sleep(9000)
+                except Exception as e:
+                    logger.error(f"Error in Dropbox token refresh scheduler: {e}")
+                    # In case of error, wait 1 hour before retrying
+                    time.sleep(3600)
+
+        self.dropbox_refresh_thread = threading.Thread(target=token_refresh_scheduler, daemon=True)
+        self.dropbox_refresh_thread.start()
+        logger.info("🔒 Automatic Dropbox token refresh scheduler started.")
 
     def create_backup(self, is_automatic=False):
         """Create a complete backup using pathlib."""
