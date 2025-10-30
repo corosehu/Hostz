@@ -2954,6 +2954,15 @@ Choose an option below:"""
         status_message = self.script_manager.get_dropbox_status()
         await update.message.reply_text(status_message, parse_mode=ParseMode.MARKDOWN_V2)
 
+    async def refresh_dropbox_token(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Admin-only command to manually refresh Dropbox token."""
+        if not self.is_admin(update.effective_user.id):
+            await self.unauthorized_response(update)
+            return
+
+        success, message = self.script_manager.refresh_dropbox_token()
+        await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+
     def run(self):
         """Run the bot with automatic restart on network errors."""
         self.application.add_error_handler(self.error_handler)
