@@ -408,16 +408,16 @@ class ScriptManager:
         if time.time() >= config.get("expires_at", 0) - 60:
             logger.info("Dropbox access token has expired or is about to. Refreshing...")
             try:
-                with dropbox.Dropbox(
+                dbx = dropbox.Dropbox(
                     app_key=config["app_key"],
                     app_secret=config["app_secret"],
                     oauth2_refresh_token=config["refresh_token"],
-                ) as dbx:
-                    dbx.refresh_access_token()
-                    config["access_token"] = dbx.oauth2_access_token
-                    config["expires_at"] = time.time() + dbx.oauth2_access_token_expiration
-                    self.save_dropbox_config()
-                    logger.info("✅ Dropbox token refreshed successfully.")
+                )
+                dbx.refresh_access_token()
+                config["access_token"] = dbx._oauth2_access_token
+                config["expires_at"] = time.time() + dbx._oauth2_access_token_expiration
+                self.save_dropbox_config()
+                logger.info("✅ Dropbox token refreshed successfully.")
             except dropbox.exceptions.AuthError as e:
                 logger.error(f"❌ Dropbox token refresh failed with an authentication error: {e}. The refresh token may be invalid or revoked. Please re-authorize with /setup_dropbox.")
                 return None
@@ -445,18 +445,17 @@ class ScriptManager:
 
         try:
             logger.info("🔄 Manually refreshing Dropbox access token...")
-            with dropbox.Dropbox(
+            dbx = dropbox.Dropbox(
                 app_key=config["app_key"],
                 app_secret=config["app_secret"],
-                oauth2_refresh_token=config["refresh_token"]
-            ) as dbx:
-                dbx.refresh_access_token()
-                # Update config
-                config["access_token"] = dbx.oauth2_access_token
-                config["expires_at"] = time.time() + dbx.oauth2_access_token_expiration
-                self.save_dropbox_config()
-                logger.info("✅ Dropbox token refreshed manually.")
-                return True, "✅ Dropbox access token refreshed successfully!"
+                oauth2_refresh_token=config["refresh_token"],
+            )
+            dbx.refresh_access_token()
+            config["access_token"] = dbx._oauth2_access_token
+            config["expires_at"] = time.time() + dbx._oauth2_access_token_expiration
+            self.save_dropbox_config()
+            logger.info("✅ Dropbox token refreshed manually.")
+            return True, "✅ Dropbox access token refreshed successfully!"
         except Exception as e:
             error_msg = f"❌ Failed to refresh Dropbox token: {e}"
             logger.error(error_msg)
@@ -2946,15 +2945,6 @@ Choose an option below:"""
         status_message = self.script_manager.get_dropbox_status()
         await update.message.reply_text(status_message, parse_mode=ParseMode.MARKDOWN_V2)
 
-    async def refresh_dropbox_token(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Admin-only command to manually refresh Dropbox token."""
-        if not self.is_admin(update.effective_user.id):
-            await self.unauthorized_response(update)
-            return
-
-        success, message = self.script_manager.refresh_dropbox_token()
-        await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
-
     def run(self):
         """Run the bot with automatic restart on network errors."""
         self.application.add_error_handler(self.error_handler)
@@ -2980,7 +2970,6 @@ Choose an option below:"""
         self.application.add_handler(CommandHandler("setup_dropbox", self.setup_dropbox))
         self.application.add_handler(CommandHandler("dropbox_code", self.dropbox_code_handler))
         self.application.add_handler(CommandHandler("dropbox_status", self.dropbox_status))
-        self.application.add_handler(CommandHandler("refresh_token", self.refresh_dropbox_token))
         self.application.add_handler(MessageHandler(filters.Document.ALL, self.handle_document))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
         self.application.add_handler(CallbackQueryHandler(self.button_callback))
