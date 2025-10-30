@@ -465,7 +465,7 @@ class ScriptManager:
         logger.info("🔄 Manually refreshing Dropbox access token...")
         success, message = self._refresh_dropbox_token()
         if success:
-            return True, "✅ Dropbox access token refreshed successfully!"
+            return True, "✅ Dropbox access token refreshed successfully\\!"
         else:
             # Provide a user-friendly error message
             if "not configured" in message:
