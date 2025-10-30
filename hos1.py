@@ -407,22 +407,11 @@ class ScriptManager:
 
         if time.time() >= config.get("expires_at", 0) - 60:
             logger.info("Dropbox access token has expired or is about to. Refreshing...")
-            try:
-                dbx = dropbox.Dropbox(
-                    app_key=config["app_key"],
-                    app_secret=config["app_secret"],
-                    oauth2_refresh_token=config["refresh_token"],
-                )
-                dbx.refresh_access_token()
-                config["access_token"] = dbx._oauth2_access_token
-                config["expires_at"] = time.time() + dbx._oauth2_access_token_expiration
-                self.save_dropbox_config()
-                logger.info("✅ Dropbox token refreshed successfully.")
-            except dropbox.exceptions.AuthError as e:
-                logger.error(f"❌ Dropbox token refresh failed with an authentication error: {e}. The refresh token may be invalid or revoked. Please re-authorize with /setup_dropbox.")
-                return None
-            except Exception as e:
-                logger.error(f"❌ An unexpected error occurred while refreshing the Dropbox token: {e}", exc_info=True)
+            success, message = self._refresh_dropbox_token()
+            if not success:
+                # Log the specific error from the refresh attempt
+                logger.error(f"Failed to refresh Dropbox token during client creation: {message}")
+                # Potentially notify admin about persistent failure here
                 return None
 
         if not config.get("access_token"):
@@ -431,20 +420,21 @@ class ScriptManager:
 
         return dropbox.Dropbox(config["access_token"])
 
-    def refresh_dropbox_token(self) -> Tuple[bool, str]:
+    def _refresh_dropbox_token(self) -> Tuple[bool, str]:
         """
-        Manually refresh Dropbox access token using the stored refresh_token.
-        Returns (success: bool, message: str)
+        Refreshes the Dropbox access token using the stored refresh_token.
+        This is a helper method to be used by other public methods.
+        Returns (success: bool, message: str for logging/debugging)
         """
         config = self.dropbox_config
         required_keys = ["app_key", "app_secret", "refresh_token"]
 
         # Validate config
         if not all(k in config and config[k] for k in required_keys):
-            return False, "❌ Dropbox not configured. Run `/setup_dropbox` and `/dropbox_code` first."
+            return False, "Dropbox not configured. Missing required keys."
 
         try:
-            logger.info("🔄 Manually refreshing Dropbox access token...")
+            logger.info("Refreshing Dropbox access token...")
             dbx = dropbox.Dropbox(
                 app_key=config["app_key"],
                 app_secret=config["app_secret"],
@@ -454,12 +444,31 @@ class ScriptManager:
             config["access_token"] = dbx._oauth2_access_token
             config["expires_at"] = time.time() + dbx._oauth2_access_token_expiration
             self.save_dropbox_config()
-            logger.info("✅ Dropbox token refreshed manually.")
-            return True, "✅ Dropbox access token refreshed successfully!"
-        except Exception as e:
-            error_msg = f"❌ Failed to refresh Dropbox token: {e}"
-            logger.error(error_msg)
+            logger.info("Dropbox token refreshed successfully.")
+            return True, "Token refreshed successfully."
+        except dropbox.exceptions.AuthError as e:
+            error_msg = f"Authentication error: {e}. The refresh token may be invalid or revoked."
+            logger.error(f"Dropbox token refresh failed. {error_msg}")
             return False, error_msg
+        except Exception as e:
+            error_msg = f"An unexpected error occurred: {e}"
+            logger.error(f"Dropbox token refresh failed. {error_msg}", exc_info=True)
+            return False, error_msg
+
+    def refresh_dropbox_token(self) -> Tuple[bool, str]:
+        """
+        Manually refresh Dropbox access token using the stored refresh_token.
+        Returns (success: bool, message: str for user)
+        """
+        logger.info("🔄 Manually refreshing Dropbox access token...")
+        success, message = self._refresh_dropbox_token()
+        if success:
+            return True, "✅ Dropbox access token refreshed successfully!"
+        else:
+            # Provide a user-friendly error message
+            if "not configured" in message:
+                 return False, "❌ Dropbox not configured. Run `/setup_dropbox` and `/dropbox_code` first."
+            return False, f"❌ Failed to refresh Dropbox token: {message}"
 
     def upload_to_dropbox(
         self,
@@ -2970,6 +2979,7 @@ Choose an option below:"""
         self.application.add_handler(CommandHandler("setup_dropbox", self.setup_dropbox))
         self.application.add_handler(CommandHandler("dropbox_code", self.dropbox_code_handler))
         self.application.add_handler(CommandHandler("dropbox_status", self.dropbox_status))
+        self.application.add_handler(CommandHandler("refresh_token", self.refresh_dropbox_token))
         self.application.add_handler(MessageHandler(filters.Document.ALL, self.handle_document))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
         self.application.add_handler(CallbackQueryHandler(self.button_callback))
