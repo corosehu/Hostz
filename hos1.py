@@ -162,11 +162,37 @@ class ScriptManager:
         self.last_backup_time = None
         self._data_lock = threading.Lock()  # Lock for thread-safe data saving
         self.dropbox_config = self.load_dropbox_config()
+        self.shell_cmd = self._detect_shell()
         self.load_data()
         self.ensure_directories()
         self.monitor_thread = threading.Thread(target=self.monitor_processes, daemon=True)
         self.monitor_thread.start()
         self.start_backup_scheduler()
+
+    def _detect_shell(self) -> str:
+        """Detect available shell (bash or sh)."""
+        # Try finding bash first
+        shell = shutil.which('bash')
+        if shell:
+            logger.info(f"Using shell: {shell}")
+            return shell
+
+        # Fallback to sh
+        shell = shutil.which('sh')
+        if shell:
+            logger.info(f"Bash not found, falling back to sh: {shell}")
+            return shell
+
+        # Fallback to common absolute paths
+        if os.path.exists('/bin/bash'):
+            return '/bin/bash'
+        if os.path.exists('/usr/bin/bash'):
+            return '/usr/bin/bash'
+        if os.path.exists('/bin/sh'):
+            return '/bin/sh'
+
+        logger.warning("No shell found via detection, defaulting to 'bash'")
+        return 'bash'
 
     def load_dropbox_config(self) -> Dict:
         """Loads Dropbox config from a JSON file."""
@@ -296,6 +322,109 @@ class ScriptManager:
         
         logger.info(f"Added script: {original_name} with ID: {script_id}")
         return script_id
+
+    def add_zip_project(self, zip_path_str: str, original_name: str) -> str:
+        """
+        Handle a zip file upload: extract, install deps, detect entry point.
+        """
+        script_id = str(uuid.uuid4())[:8]
+        # Create a unique folder for this project
+        folder_name = f"{script_id}_{os.path.splitext(original_name)[0]}"
+        scripts_dir = Path(SCRIPTS_DIR).resolve()
+        project_dir = scripts_dir / folder_name
+
+        project_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Created project directory: {project_dir}")
+
+        try:
+            # 1. Extract Zip
+            with zipfile.ZipFile(zip_path_str, 'r') as zip_ref:
+                zip_ref.extractall(project_dir)
+            logger.info(f"Extracted {original_name} to {project_dir}")
+
+            # 2. Install Python Dependencies
+            req_file = project_dir / 'requirements.txt'
+            if req_file.exists():
+                logger.info("Found requirements.txt, installing dependencies...")
+                try:
+                    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", str(req_file)])
+                    logger.info("Dependencies installed successfully.")
+                except subprocess.CalledProcessError as e:
+                    logger.error(f"Failed to install dependencies: {e}")
+                    # We continue, as it might still run or user can fix manually
+
+            # 3. Detect Entry Point
+            entry_point = None
+            script_type = 'python' # Default assumption
+
+            # Prioritized list of common entry points
+            candidates = [
+                ('main.py', 'python'), ('bot.py', 'python'), ('app.py', 'python'),
+                ('index.py', 'python'), ('run.py', 'python'),
+                ('index.js', 'javascript'), ('main.js', 'javascript'), ('bot.js', 'javascript'),
+                ('server.js', 'javascript'),
+                ('start.sh', 'shell'), ('run.sh', 'shell')
+            ]
+
+            for fname, stype in candidates:
+                if (project_dir / fname).exists():
+                    entry_point = project_dir / fname
+                    script_type = stype
+                    break
+
+            # Fallback search if no common name found
+            if not entry_point:
+                py_files = list(project_dir.rglob("*.py"))
+                js_files = list(project_dir.rglob("*.js"))
+                sh_files = list(project_dir.rglob("*.sh"))
+
+                if py_files:
+                    entry_point = py_files[0]
+                    script_type = 'python'
+                elif js_files:
+                    entry_point = js_files[0]
+                    script_type = 'javascript'
+                elif sh_files:
+                    entry_point = sh_files[0]
+                    script_type = 'shell'
+
+            if not entry_point:
+                raise ValueError("Could not detect a valid entry point script (e.g., main.py, bot.py)")
+
+            # Ensure shell scripts are executable
+            if script_type == 'shell':
+                entry_point.chmod(entry_point.stat().st_mode | 0o111)
+
+            logger.info(f"Detected entry point: {entry_point} ({script_type})")
+
+            # 4. Register Script
+            unique_name = f"{folder_name}/{entry_point.name}"
+
+            script_info = {
+                'id': script_id,
+                'original_name': original_name,
+                'file_name': unique_name,
+                'file_path': str(entry_point),
+                'script_type': script_type,
+                'created_at': datetime.now().isoformat(),
+                'status': 'stopped',
+                'auto_restart': False,
+                'restart_count': 0,
+                'last_started': None,
+                'last_stopped': None,
+                'is_package': True # Marks this as a folder-based project
+            }
+
+            self.scripts[script_id] = script_info
+            self.save_data()
+            return script_id
+
+        except Exception as e:
+            # Cleanup on failure
+            if project_dir.exists():
+                shutil.rmtree(project_dir)
+            logger.error(f"Error processing zip upload: {e}")
+            raise
 
     def start_backup_scheduler(self):
         """Start the automatic backup scheduler"""
@@ -653,11 +782,11 @@ class ScriptManager:
         if script_type == 'python':
             return [sys.executable, filename]
         elif script_type == 'shell':
-            return ['bash', filename]
+            return [self.shell_cmd, filename]
         elif script_type == 'javascript':
             return ['node', filename]
         else:
-            return ['bash', filename]  # Default to bash
+            return [self.shell_cmd, filename]  # Default to detected shell
 
     def start_script(self, script_id: str) -> Tuple[bool, str]:
         """Start a script."""
@@ -769,7 +898,7 @@ class ScriptManager:
         return self.start_script(script_id)
 
     def delete_script(self, script_id: str) -> Tuple[bool, str]:
-        """Delete a script and its associated files."""
+        """Delete a script and its associated files (including project folder)."""
         if script_id not in self.scripts:
             return False, "Script not found"
         
@@ -779,8 +908,23 @@ class ScriptManager:
             self.stop_script(script_id)
             
             script_path = Path(script['file_path'])
-            if script_path.exists():
-                script_path.unlink()
+
+            # Handle package (folder-based) scripts
+            if script.get('is_package', False):
+                project_dir = script_path.parent
+                # Security check: ensure we are inside SCRIPTS_DIR
+                if Path(SCRIPTS_DIR).resolve() in project_dir.resolve().parents:
+                    if project_dir.exists():
+                        shutil.rmtree(project_dir)
+                        logger.info(f"Deleted project directory: {project_dir}")
+                else:
+                    logger.warning(f"Skipping directory deletion (unsafe path): {project_dir}")
+                    # Fallback to just deleting the file if possible
+                    if script_path.exists():
+                        script_path.unlink()
+            else:
+                if script_path.exists():
+                    script_path.unlink()
             
             log_file = Path(LOGS_DIR) / f"{script_id}.log"
             if log_file.exists():
@@ -979,9 +1123,9 @@ class ScriptManager:
             # Create a pseudo-terminal
             master_fd, slave_fd = pty.openpty()
 
-            # Start a new bash session in the PTY
+            # Start a new shell session in the PTY
             process = subprocess.Popen(
-                ['bash', '-i'],
+                [self.shell_cmd, '-i'],
                 preexec_fn=os.setsid,
                 stdin=slave_fd,
                 stdout=slave_fd,
@@ -2119,15 +2263,19 @@ Your server\\. Fully automated\\. Fully interactive\\. Fully yours\\.
             file_name = update.message.document.file_name
 
             # Determine script type
+            is_zip = False
             if file_name.endswith('.py'):
                 script_type = 'python'
             elif file_name.endswith('.sh'):
                 script_type = 'shell'
             elif file_name.endswith('.js'):
                 script_type = 'javascript'
+            elif file_name.endswith('.zip'):
+                script_type = 'zip'
+                is_zip = True
             else:
                 await processing_msg.edit_text(
-                    "❌ *Unsupported file type*\\. Supported: `\\.py`, `\\.sh`, `\\.js`",
+                    "❌ *Unsupported file type*\\. Supported: `\\.py`, `\\.sh`, `\\.js`, `\\.zip`",
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
                 return
@@ -2141,17 +2289,22 @@ Your server\\. Fully automated\\. Fully interactive\\. Fully yours\\.
             # Download in a non-blocking way
             await file.download_to_drive(temp_path)
 
-            await processing_msg.edit_text("⚙️ Setting up script...")
+            await processing_msg.edit_text("⚙️ Processing & Installing..." if is_zip else "⚙️ Setting up script...")
 
             # Run the blocking script addition in a separate thread
             try:
-                script_id = await asyncio.to_thread(
-                    self.script_manager.add_script, temp_path, file_name, script_type
-                )
+                if is_zip:
+                    script_id = await asyncio.to_thread(
+                        self.script_manager.add_zip_project, temp_path, file_name
+                    )
+                else:
+                    script_id = await asyncio.to_thread(
+                        self.script_manager.add_script, temp_path, file_name, script_type
+                    )
             except Exception as e:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
-                await processing_msg.edit_text(f"❌ *Script setup failed:* `{escape_markdown(str(e))}`", parse_mode=ParseMode.MARKDOWN_V2)
+                await processing_msg.edit_text(f"❌ *Setup failed:* `{escape_markdown(str(e))}`", parse_mode=ParseMode.MARKDOWN_V2)
                 return
 
             script_info = self.script_manager.scripts.get(script_id)
