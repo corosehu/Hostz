@@ -162,11 +162,37 @@ class ScriptManager:
         self.last_backup_time = None
         self._data_lock = threading.Lock()  # Lock for thread-safe data saving
         self.dropbox_config = self.load_dropbox_config()
+        self.shell_cmd = self._detect_shell()
         self.load_data()
         self.ensure_directories()
         self.monitor_thread = threading.Thread(target=self.monitor_processes, daemon=True)
         self.monitor_thread.start()
         self.start_backup_scheduler()
+
+    def _detect_shell(self) -> str:
+        """Detect available shell (bash or sh)."""
+        # Try finding bash first
+        shell = shutil.which('bash')
+        if shell:
+            logger.info(f"Using shell: {shell}")
+            return shell
+
+        # Fallback to sh
+        shell = shutil.which('sh')
+        if shell:
+            logger.info(f"Bash not found, falling back to sh: {shell}")
+            return shell
+
+        # Fallback to common absolute paths
+        if os.path.exists('/bin/bash'):
+            return '/bin/bash'
+        if os.path.exists('/usr/bin/bash'):
+            return '/usr/bin/bash'
+        if os.path.exists('/bin/sh'):
+            return '/bin/sh'
+
+        logger.warning("No shell found via detection, defaulting to 'bash'")
+        return 'bash'
 
     def load_dropbox_config(self) -> Dict:
         """Loads Dropbox config from a JSON file."""
@@ -653,11 +679,11 @@ class ScriptManager:
         if script_type == 'python':
             return [sys.executable, filename]
         elif script_type == 'shell':
-            return ['bash', filename]
+            return [self.shell_cmd, filename]
         elif script_type == 'javascript':
             return ['node', filename]
         else:
-            return ['bash', filename]  # Default to bash
+            return [self.shell_cmd, filename]  # Default to detected shell
 
     def start_script(self, script_id: str) -> Tuple[bool, str]:
         """Start a script."""
@@ -979,9 +1005,9 @@ class ScriptManager:
             # Create a pseudo-terminal
             master_fd, slave_fd = pty.openpty()
 
-            # Start a new bash session in the PTY
+            # Start a new shell session in the PTY
             process = subprocess.Popen(
-                ['bash', '-i'],
+                [self.shell_cmd, '-i'],
                 preexec_fn=os.setsid,
                 stdin=slave_fd,
                 stdout=slave_fd,
