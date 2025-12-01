@@ -487,6 +487,18 @@ class ScriptManager:
                     zipf.write(log_file, log_file.name)
                     logger.info("✅ Added bot.log to backup")
 
+                # Add hos1.py (The bot source code)
+                source_file = Path('hos1.py')
+                if source_file.exists():
+                    zipf.write(source_file, source_file.name)
+                    logger.info("✅ Added hos1.py to backup")
+
+                # Add dropbox_config.json
+                config_file = Path(DROPBOX_CONFIG_FILE)
+                if config_file.exists():
+                    zipf.write(config_file, config_file.name)
+                    logger.info("✅ Added dropbox_config.json to backup")
+
                 # Add backup metadata
                 metadata = {
                     'backup_type': backup_type,
@@ -734,7 +746,10 @@ class ScriptManager:
                     logger.info("📦 Extracted backup to temporary directory.")
 
                 # Restore files and directories
-                for item in [DATA_FILE, SCRIPTS_DIR, LOGS_DIR]:
+                # Added hos1.py and dropbox_config.json to restoration list
+                restore_items = [DATA_FILE, SCRIPTS_DIR, LOGS_DIR, 'hos1.py', DROPBOX_CONFIG_FILE]
+
+                for item in restore_items:
                     source = temp_dir / item
                     dest = Path(item)
                     if source.exists():
@@ -742,7 +757,11 @@ class ScriptManager:
                             backup_dest = Path(f"{dest}_{int(time.time())}.bak")
                             dest.rename(backup_dest)
                             logger.info(f"Backed up current '{dest}' to '{backup_dest}'")
-                        shutil.copytree(source, dest) if source.is_dir() else shutil.copy2(source, dest)
+
+                        if source.is_dir():
+                            shutil.copytree(source, dest)
+                        else:
+                            shutil.copy2(source, dest)
                         logger.info(f"✅ Restored '{dest}'")
                 
                 # Reload data and normalize paths
@@ -751,19 +770,38 @@ class ScriptManager:
                 self.script_stdin_pipes.clear()
 
                 scripts_dir_abs = Path(SCRIPTS_DIR).resolve()
+                scripts_to_restart = []
+
                 for script_id, script_info in self.scripts.items():
+                    # Check if script was running when backup was taken
+                    was_running = script_info.get('status') == 'running'
+
+                    # Reset state to stopped initially to ensure clean state
                     script_info.update({
                         'status': 'stopped',
                         'last_stopped': datetime.now().isoformat(),
                         'pid': None,
                         'file_path': str(scripts_dir_abs / script_info['file_name'])
                     })
+
+                    if was_running:
+                        scripts_to_restart.append(script_id)
                 
                 self.save_data()
+
+                # Auto-restart scripts that were running
+                restarted_count = 0
+                for script_id in scripts_to_restart:
+                    success, msg = self.start_script(script_id)
+                    if success:
+                        restarted_count += 1
+                        logger.info(f"🔄 Auto-restarted script {script_id} after restore")
+                    else:
+                        logger.warning(f"⚠️ Failed to auto-restart script {script_id}: {msg}")
                 
                 valid_scripts = sum(1 for s in self.scripts.values() if Path(s['file_path']).exists())
                 logger.info("✅ Backup restoration completed successfully.")
-                return True, f"Restored {len(self.scripts)} scripts ({valid_scripts} valid)."
+                return True, f"Restored {len(self.scripts)} scripts ({valid_scripts} valid). Restarted {restarted_count} scripts."
                     
         except zipfile.BadZipFile:
             return False, "Invalid or corrupted ZIP file."
