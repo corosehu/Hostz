@@ -2390,25 +2390,53 @@ Ready to run\\! 🚀"""
             if user_id in self.script_manager.terminal_sessions:
                 command = update.message.text.strip()
                 if command:
+                    processing_msg = await update.message.reply_text(f"🔄 *Executing:* `{escape_markdown(command)}`", parse_mode=ParseMode.MARKDOWN_V2)
+
                     # Send command to interactive terminal
                     success, message = self.script_manager.send_input_to_terminal(user_id, command, add_newline=True)
                     
                     if success:
-                        # Wait for output
-                        await asyncio.sleep(0.5)
-                        output = self.script_manager.read_terminal_output(user_id, timeout=3.0)
+                        # Wait for output - Increased wait time to capture full response
+                        await asyncio.sleep(1.0)
                         
-                        if output and output != "No output received":
-                            # Truncate if too long
-                            if len(output) > 4000:
-                                output = output[:4000] + "\n\n\\.\\.\\. \\(output truncated\\)"
+                        # Attempt to read output multiple times to gather full response
+                        full_output = ""
+                        for i in range(3): # Try reading 3 times
+                            chunk = self.script_manager.read_terminal_output(user_id, timeout=1.0)
                             
-                            await update.message.reply_text(f"```\n{output}\n```", parse_mode=ParseMode.MARKDOWN_V2)
-                        else:
-                            # No immediate output, acknowledge command
-                            await update.message.reply_text(f"📝 *Command sent:* `{escape_markdown(command)}`", parse_mode=ParseMode.MARKDOWN_V2)
+                            if chunk and chunk != "No output received":
+                                full_output += chunk
+                                # If we got data, wait a tiny bit to give the process time to flush more
+                                await asyncio.sleep(0.2)
+                            elif chunk == "No output received":
+                                # Don't append the error message if we already have some output or are in a loop
+                                pass
+                            else:
+                                # No more data available right now
+                                break
+
+                        output = full_output if full_output else "No output received."
+
+                        # Clean up common artifacts if needed
+                        if output == "No output received.":
+                             output = "Command sent (no immediate output)."
+
+                        # Truncate if too long (Telegram limit is 4096)
+                        if len(output) > 3800:
+                            output = output[:3800] + "\n\n\\.\\.\\. \\(output truncated\\)"
+
+                        response_text = f"*Terminal Command:* `{escape_markdown(command)}`\n\n"
+                        response_text += f"```\n{output}\n```"
+
+                        try:
+                            await processing_msg.edit_text(response_text, parse_mode=ParseMode.MARKDOWN_V2)
+                        except Exception as e:
+                             # Fallback for Markdown errors
+                            logger.warning(f"Markdown send failed: {e}")
+                            await processing_msg.edit_text(f"Command: {command}\n\n{output}")
+
                     else:
-                        await update.message.reply_text(f"❌ *Terminal error:* `{escape_markdown(message)}`", parse_mode=ParseMode.MARKDOWN_V2)
+                        await processing_msg.edit_text(f"❌ *Terminal error:* `{escape_markdown(message)}`", parse_mode=ParseMode.MARKDOWN_V2)
                         # Terminal might have died, restart it
                         if "session has ended" in message.lower():
                             success, restart_msg = self.script_manager.start_interactive_terminal(user_id)
