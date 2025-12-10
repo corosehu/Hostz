@@ -163,6 +163,7 @@ class ScriptManager:
         self._data_lock = threading.Lock()  # Lock for thread-safe data saving
         self.dropbox_config = self.load_dropbox_config()
         self.shell_cmd = self._detect_shell()
+        self._restoring = False  # Flag to prevent data overwrite during restore
         self.load_data()
         self.ensure_directories()
         self.monitor_thread = threading.Thread(target=self.monitor_processes, daemon=True)
@@ -722,6 +723,7 @@ class ScriptManager:
 
     def restore_backup(self, backup_file_path_str: str):
         """Restore bot data from a backup file."""
+        self._restoring = True
         backup_path = Path(backup_file_path_str)
         try:
             logger.info(f"🔄 Starting backup restoration from: {backup_path.name}")
@@ -808,6 +810,8 @@ class ScriptManager:
         except Exception as e:
             logger.error(f"❌ Error during backup restoration: {e}", exc_info=True)
             return False, f"Restoration failed: {str(e)}"
+        finally:
+            self._restoring = False
 
     def get_run_command(self, script_info: Dict) -> List[str]:
         """Get the appropriate run command for script type"""
@@ -1079,6 +1083,11 @@ class ScriptManager:
         """Monitor running scripts and restart if needed"""
         while True:
             try:
+                # Skip monitoring and saving if a restore is in progress
+                if self._restoring:
+                    time.sleep(1)
+                    continue
+
                 for script_id, process in list(self.processes.items()):
                     if process.poll() is not None:  # Process has terminated
                         script = self.scripts.get(script_id)
