@@ -1385,6 +1385,112 @@ class TelegramBot:
         """Check if user is admin"""
         return user_id in ADMIN_IDS
 
+    async def _get_status_text(self):
+        """Helper to generate server status text with IP and Location."""
+        status_parts = []
+
+        # System metrics
+        try:
+            cpu_percent = psutil.cpu_percent(interval=1)
+            status_parts.append(f"• *CPU:* {escape_markdown(f'{cpu_percent}%')} usage")
+        except Exception:
+            status_parts.append("• *CPU:* Unable to read")
+
+        try:
+            memory = psutil.virtual_memory()
+            status_parts.append(f"• *Memory:* {escape_markdown(f'{memory.percent}%')} \\({escape_markdown(f'{memory.used // (1024**3)}GB / {memory.total // (1024**3)}GB')}\\)")
+        except Exception:
+            status_parts.append("• *Memory:* Unable to read")
+
+        try:
+            disk = psutil.disk_usage('/')
+            status_parts.append(f"• *Disk:* {escape_markdown(f'{disk.percent}%')} \\({escape_markdown(f'{disk.used // (1024**3)}GB / {disk.total // (1024**3)}GB')}\\)")
+        except Exception:
+            status_parts.append("• *Disk:* Unable to read")
+
+        try:
+            boot_time = datetime.fromtimestamp(psutil.boot_time())
+            boot_time_str = boot_time.strftime('%Y-%m-%d %H:%M:%S')
+        except Exception:
+            boot_time_str = "Unable to read"
+
+        # Network Info (IP & Location)
+        ip_info = "Loading..."
+        location_info = "Loading..."
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get('http://ip-api.com/json/', timeout=3.0)
+                if response.status_code == 200:
+                    data = response.json()
+                    ip_info = data.get('query', 'Unknown')
+                    location_info = f"{data.get('city', 'Unknown')}, {data.get('country', 'Unknown')}"
+                else:
+                    ip_info = "Unavailable"
+                    location_info = "Unavailable"
+        except Exception:
+            ip_info = "Error fetching"
+            location_info = "Error fetching"
+
+        # Scripts Status
+        try:
+            running_scripts = len([s for s in self.script_manager.list_scripts() if s['status'] == 'running'])
+            total_scripts = len(self.script_manager.scripts)
+            scripts_with_input = len(self.script_manager.script_stdin_pipes)
+        except Exception:
+            running_scripts = 0
+            total_scripts = 0
+            scripts_with_input = 0
+
+        active_terminals = len(self.script_manager.interactive_processes)
+
+        # Network IO
+        try:
+            network_info = psutil.net_io_counters()
+            network_sent = network_info.bytes_sent // (1024**2)
+            network_recv = network_info.bytes_recv // (1024**2)
+        except Exception:
+            network_sent = 0
+            network_recv = 0
+
+        try:
+            system_info = {
+                'platform': platform.system(),
+                'release': platform.release(),
+                'architecture': platform.machine(),
+            }
+        except Exception:
+            system_info = {
+                'platform': 'Unknown',
+                'release': 'Unknown',
+                'architecture': 'Unknown'
+            }
+
+        return f"""*📊 Enhanced Server Status*
+
+*🌍 Location & Network:*
+• *IP Address:* `{escape_markdown(ip_info)}`
+• *Location:* `{escape_markdown(location_info)}`
+• *Bytes Sent:* {network_sent}MB
+• *Bytes Received:* {network_recv}MB
+
+*🖥️ System:*
+• *OS:* {escape_markdown(system_info['platform'])} {escape_markdown(system_info['release'])}
+• *Architecture:* {escape_markdown(system_info['architecture'])}
+• *Boot Time:* {escape_markdown(boot_time_str)}
+
+*⚡ Performance:*
+{chr(10).join(status_parts)}
+
+*🔄 Scripts Status:*
+• *Running:* {running_scripts}/{total_scripts}
+• *Interactive Ready:* {scripts_with_input}
+• *Total Managed:* {total_scripts}
+
+*🖥️ Terminal Sessions:*
+• *Active Interactive:* {active_terminals}
+
+*🔋 Health:* 🟢 Enhanced & Operational"""
+
     @resilient_api_call
     async def unauthorized_response(self, update: Update):
         """Send unauthorized response"""
@@ -1876,92 +1982,7 @@ Your server\\. Fully automated\\. Fully interactive\\. Fully yours\\.
                 await self.unauthorized_response(update)
                 return
             
-            status_parts = []
-            
-            # System metrics with error handling
-            try:
-                cpu_percent = psutil.cpu_percent(interval=1)
-                status_parts.append(f"• *CPU:* {escape_markdown(f'{cpu_percent}%')} usage")
-            except Exception as e:
-                status_parts.append(f"• *CPU:* Unable to read \\({escape_markdown(str(e)[:30])}\\.\\.\\.\\)")
-            
-            try:
-                memory = psutil.virtual_memory()
-                status_parts.append(f"• *Memory:* {escape_markdown(f'{memory.percent}%')} \\({escape_markdown(f'{memory.used // (1024**3)}GB / {memory.total // (1024**3)}GB')}\\)")
-            except Exception as e:
-                status_parts.append(f"• *Memory:* Unable to read \\({escape_markdown(str(e)[:30])}\\.\\.\\.\\)")
-            
-            try:
-                disk = psutil.disk_usage('/')
-                status_parts.append(f"• *Disk:* {escape_markdown(f'{disk.percent}%')} \\({escape_markdown(f'{disk.used // (1024**3)}GB / {disk.total // (1024**3)}GB')}\\)")
-            except Exception as e:
-                status_parts.append(f"• *Disk:* Unable to read \\({escape_markdown(str(e)[:30])}\\.\\.\\.\\)")
-                
-            try:
-                boot_time = datetime.fromtimestamp(psutil.boot_time())
-                boot_time_str = boot_time.strftime('%Y-%m-%d %H:%M:%S')
-            except Exception:
-                boot_time_str = "Unable to read"
-            
-            # Running scripts count
-            try:
-                running_scripts = len([s for s in self.script_manager.list_scripts() if s['status'] == 'running'])
-                total_scripts = len(self.script_manager.scripts)
-                scripts_with_input = len(self.script_manager.script_stdin_pipes)
-            except Exception:
-                running_scripts = 0
-                total_scripts = 0
-                scripts_with_input = 0
-            
-            # Active terminal sessions
-            active_terminals = len(self.script_manager.interactive_processes)
-            
-            # System info with error handling
-            try:
-                system_info = {
-                    'platform': platform.system(),
-                    'release': platform.release(),
-                    'architecture': platform.machine(),
-                }
-            except Exception:
-                system_info = {
-                    'platform': 'Unknown',
-                    'release': 'Unknown', 
-                    'architecture': 'Unknown'
-                }
-            
-            # Network interfaces with error handling
-            try:
-                network_info = psutil.net_io_counters()
-                network_sent = network_info.bytes_sent // (1024**2)
-                network_recv = network_info.bytes_recv // (1024**2)
-            except Exception:
-                network_sent = 0
-                network_recv = 0
-            
-            status_text = f"""*📊 Enhanced Server Status*
-
-*🖥️ System:*
-• *OS:* {escape_markdown(system_info['platform'])} {escape_markdown(system_info['release'])}
-• *Architecture:* {escape_markdown(system_info['architecture'])}
-• *Boot Time:* {escape_markdown(boot_time_str)}
-
-*⚡ Performance:*
-{chr(10).join(status_parts)}
-
-*🔄 Scripts Status:*
-• *Running:* {running_scripts}/{total_scripts}
-• *Interactive Ready:* {scripts_with_input}
-• *Total Managed:* {total_scripts}
-
-*🖥️ Terminal Sessions:*
-• *Active Interactive:* {active_terminals}
-
-*🌐 Network:*
-• *Bytes Sent:* {network_sent}MB
-• *Bytes Received:* {network_recv}MB
-
-*🔋 Health:* 🟢 Enhanced & Operational"""
+            status_text = await self._get_status_text()
             
             keyboard = [
                 [InlineKeyboardButton("🔄 Refresh", callback_data="server_status")],
@@ -1978,6 +1999,182 @@ Your server\\. Fully automated\\. Fully interactive\\. Fully yours\\.
             except:
                 pass
 
+    def _get_scripts_list_markup(self, page: int = 0):
+        """Helper to generate script list text and keyboard with pagination."""
+        scripts = self.script_manager.list_scripts()
+
+        if not scripts:
+            text = "📂 *No scripts found*\n\nUpload a `\\.py`, `\\.sh`, or `\\.js` file to get started\\!"
+            keyboard = [[InlineKeyboardButton("📤 Upload Script", callback_data="upload_help")]]
+            return text, InlineKeyboardMarkup(keyboard)
+
+        # Sort: Running first, then by creation date (newest first)
+        # We use a tuple key. Boolean True (1) > False (0).
+        sorted_scripts = sorted(
+            scripts,
+            key=lambda x: (1 if x['status'] == 'running' else 0, x['created_at']),
+            reverse=True
+        )
+
+        # Pagination
+        items_per_page = 6
+        total_scripts = len(sorted_scripts)
+        start_index = page * items_per_page
+        end_index = start_index + items_per_page
+        page_scripts = sorted_scripts[start_index:end_index]
+
+        text = f"📂 *Your Enhanced Scripts (Page {page + 1}):*\n\n"
+        keyboard = []
+
+        for script in page_scripts:
+            status_emoji = "🟢" if script['status'] == 'running' else "🔴"
+            auto_restart_emoji = "🔄" if script.get('auto_restart', False) else ""
+            input_ready_emoji = "🎯" if script['id'] in self.script_manager.script_stdin_pipes else ""
+            
+            text += f"{status_emoji} *{escape_markdown(script['original_name'])}* {auto_restart_emoji}{input_ready_emoji}\n"
+            text += f"   • *Status:* {escape_markdown(script['status'])}\n"
+            text += f"   • *Type:* `{escape_markdown(script['script_type'])}`\n"
+            if script.get('pid'):
+                text += f"   • *PID:* `{script['pid']}`\n"
+            text += f"   • *ID:* `{script['id']}`\n"
+            if input_ready_emoji:
+                text += f"   • *Input:* `/sinput {script['id']} <text>`\n"
+            text += "\n"
+            
+            keyboard.append([
+                InlineKeyboardButton(f"⚙️ {script['original_name'][:15]}",
+                                   callback_data=f"manage_{script['id']}")
+            ])
+            
+        text += "🎯 \\= Input Ready \\| 🔄 \\= Auto\\-restart \\| 🟢 \\= Running\n"
+
+        # Navigation Buttons
+        nav_buttons = []
+        if page > 0:
+            nav_buttons.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"list_scripts_page_{page - 1}"))
+        if end_index < total_scripts:
+            nav_buttons.append(InlineKeyboardButton("➡️ Next", callback_data=f"list_scripts_page_{page + 1}"))
+            
+        if nav_buttons:
+            keyboard.append(nav_buttons)
+            
+        keyboard.append([InlineKeyboardButton("🔄 Refresh", callback_data=f"list_scripts_page_{page}")])
+        keyboard.append([InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")])
+
+        return text, InlineKeyboardMarkup(keyboard)
+
+    @resilient_api_call
+    async def running_scripts_monitor(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Monitor currently running scripts and their resource usage."""
+        try:
+            if not self.is_admin(update.effective_user.id):
+                await self.unauthorized_response(update)
+                return
+
+            running_scripts = [s for s in self.script_manager.list_scripts() if s['status'] == 'running']
+
+            if not running_scripts:
+                await update.message.reply_text("🚫 *No scripts are currently running\\.*", parse_mode=ParseMode.MARKDOWN_V2)
+                return
+
+            text = "🚀 *Currently Running Scripts:*\n\n"
+
+            for script in running_scripts:
+                pid = script.get('pid')
+                name = script['original_name']
+                script_id = script['id']
+
+                cpu_usage = "N/A"
+                memory_usage = "N/A"
+
+                if pid:
+                    try:
+                        proc = psutil.Process(pid)
+                        # Use a small interval for more accurate CPU reading without blocking too long
+                        cpu = proc.cpu_percent(interval=0.1)
+                        mem = proc.memory_info()
+
+                        cpu_usage = f"{cpu:.1f}%"
+                        memory_usage = f"{mem.rss / (1024 * 1024):.1f} MB"
+
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        cpu_usage = "Process Lost"
+                        memory_usage = "N/A"
+
+                text += f"🔹 *{escape_markdown(name)}*\n"
+                text += f"   🆔 ID: `{script_id}`\n"
+                text += f"   🔢 PID: `{pid}`\n"
+                text += f"   ⚙️ Speed \\(CPU\\): `{escape_markdown(cpu_usage)}`\n"
+                text += f"   🧠 RAM: `{escape_markdown(memory_usage)}`\n\n"
+
+            # Add refresh button
+            keyboard = [[InlineKeyboardButton("🔄 Refresh", callback_data="refresh_running_monitor")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN_V2)
+
+        except Exception as e:
+            logger.error(f"Error in running_scripts_monitor: {e}")
+            try:
+                await update.message.reply_text(f"❌ *Error:* `{escape_markdown(str(e))}`", parse_mode=ParseMode.MARKDOWN_V2)
+            except:
+                pass
+
+    async def running_scripts_monitor_callback(self, query, context):
+        """Callback to refresh running scripts monitor."""
+        try:
+            running_scripts = [s for s in self.script_manager.list_scripts() if s['status'] == 'running']
+
+            if not running_scripts:
+                await query.edit_message_text("🚫 *No scripts are currently running\\.*", parse_mode=ParseMode.MARKDOWN_V2)
+                return
+
+            text = "🚀 *Currently Running Scripts:*\n\n"
+            
+            for script in running_scripts:
+                pid = script.get('pid')
+                name = script['original_name']
+                script_id = script['id']
+
+                cpu_usage = "N/A"
+                memory_usage = "N/A"
+
+                if pid:
+                    try:
+                        proc = psutil.Process(pid)
+                        cpu = proc.cpu_percent(interval=0.1)
+                        mem = proc.memory_info()
+
+                        cpu_usage = f"{cpu:.1f}%"
+                        memory_usage = f"{mem.rss / (1024 * 1024):.1f} MB"
+
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        cpu_usage = "Process Lost"
+                        memory_usage = "N/A"
+
+                text += f"🔹 *{escape_markdown(name)}*\n"
+                text += f"   🆔 ID: `{script_id}`\n"
+                text += f"   🔢 PID: `{pid}`\n"
+                text += f"   ⚙️ Speed \\(CPU\\): `{escape_markdown(cpu_usage)}`\n"
+                text += f"   🧠 RAM: `{escape_markdown(memory_usage)}`\n\n"
+
+            keyboard = [[InlineKeyboardButton("🔄 Refresh", callback_data="refresh_running_monitor")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            # Avoid BadRequest if text hasn't changed
+            try:
+                await query.edit_message_text(text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN_V2)
+            except telegram.error.BadRequest as e:
+                if "Message is not modified" not in str(e):
+                    raise e
+
+        except Exception as e:
+            logger.error(f"Error in running_scripts_monitor_callback: {e}")
+            try:
+                await query.edit_message_text(f"❌ *Error:* `{escape_markdown(str(e))}`", parse_mode=ParseMode.MARKDOWN_V2)
+            except:
+                pass
+
     @resilient_api_call
     async def list_scripts(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """List all managed scripts"""
@@ -1986,49 +2183,7 @@ Your server\\. Fully automated\\. Fully interactive\\. Fully yours\\.
                 await self.unauthorized_response(update)
                 return
             
-            scripts = self.script_manager.list_scripts()
-            
-            if not scripts:
-                keyboard = [[InlineKeyboardButton("📤 Upload Script", callback_data="upload_help")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                await update.message.reply_text(
-                    "📂 *No scripts found*\n\nUpload a `\\.py`, `\\.sh`, or `\\.js` file to get started\\!",
-                    reply_markup=reply_markup,
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-                return
-            
-            text = "📂 *Your Enhanced Scripts:*\n\n"
-            keyboard = []
-            
-            for script in sorted(scripts, key=lambda x: x['created_at'], reverse=True):
-                status_emoji = "🟢" if script['status'] == 'running' else "🔴"
-                auto_restart_emoji = "🔄" if script.get('auto_restart', False) else ""
-                input_ready_emoji = "🎯" if script['id'] in self.script_manager.script_stdin_pipes else ""
-                
-                text += f"{status_emoji} *{escape_markdown(script['original_name'])}* {auto_restart_emoji}{input_ready_emoji}\n"
-                text += f"   • *Type:* `{escape_markdown(script['script_type'])}`\n"
-                text += f"   • *Status:* {escape_markdown(script['status'])}\n"
-                if script.get('pid'):
-                    text += f"   • *PID:* `{script['pid']}`\n"
-                text += f"   • *ID:* `{script['id']}`\n"
-                if input_ready_emoji:
-                    text += f"   • *Input Ready:* `/sinput {script['id']} <text>`\n"
-                text += "\n"
-                
-                # Create buttons for each script
-                keyboard.append([
-                    InlineKeyboardButton(f"⚙️ {script['original_name'][:15]}", 
-                                       callback_data=f"manage_{script['id']}")
-                ])
-            
-            # Add legend
-            text += "🎯 \\= Input Ready \\| 🔄 \\= Auto\\-restart \\| 🟢 \\= Running\n"
-            
-            # Add general buttons
-            keyboard.append([InlineKeyboardButton("🔄 Refresh", callback_data="list_scripts")])
-            
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            text, reply_markup = self._get_scripts_list_markup(page=0)
             await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN_V2)
             
         except Exception as e:
@@ -2474,7 +2629,7 @@ Ready to run\\! 🚀"""
             
             data = query.data
             
-            if data == "list_scripts":
+            if data == "list_scripts" or data.startswith("list_scripts_page_"):
                 await self.list_scripts_callback(query, context)
             elif data == "server_status":
                 await self.server_status_callback(query, context)
@@ -2509,6 +2664,8 @@ Ready to run\\! 🚀"""
                 await self.delete_script_callback(query, script_id)
             elif data == "upload_help":
                 await self.upload_help_callback(query, context)
+            elif data == "refresh_running_monitor":
+                await self.running_scripts_monitor_callback(query, context)
             elif data == "main_menu":
                 await self.main_menu_callback(query, context)
                 
@@ -2851,37 +3008,23 @@ Choose an option below:"""
     async def list_scripts_callback(self, query, context):
         """List scripts callback"""
         try:
-            scripts = self.script_manager.list_scripts()
+            page = 0
+            if query.data.startswith("list_scripts_page_"):
+                try:
+                    page = int(query.data.split("_")[-1])
+                except ValueError:
+                    page = 0
             
-            if not scripts:
-                text = "📂 *No scripts found*\n\nUpload a `\\.py`, `\\.sh`, or `\\.js` file to get started\\!"
-                keyboard = [[InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")]]
-            else:
-                text = "📂 *Your Enhanced Scripts:*\n\n"
-                keyboard = []
-                
-                for script in sorted(scripts, key=lambda x: x['created_at'], reverse=True):
-                    status_emoji = "🟢" if script['status'] == 'running' else "🔴"
-                    auto_restart_emoji = "🔄" if script.get('auto_restart', False) else ""
-                    input_ready_emoji = "🎯" if script['id'] in self.script_manager.script_stdin_pipes else ""
-                    
-                    text += f"{status_emoji} *{escape_markdown(script['original_name'])}* {auto_restart_emoji}{input_ready_emoji}\n"
-                    text += f"   • *Status:* {escape_markdown(script['status'])}\n"
-                    text += f"   • *Type:* `{escape_markdown(script['script_type'])}`\n"
-                    if input_ready_emoji:
-                        text += f"   • *Input:* `/sinput {script['id']} <text>`\n"
-                    text += "\n"
-                    
-                    keyboard.append([
-                        InlineKeyboardButton(f"⚙️ {script['original_name'][:15]}", 
-                                           callback_data=f"manage_{script['id']}")
-                    ])
-                
-                text += "🎯 \\= Input Ready \\| 🔄 \\= Auto\\-restart \\| 🟢 \\= Running\n"
-                keyboard.append([InlineKeyboardButton("🔄 Refresh", callback_data="list_scripts")])
+            text, reply_markup = self._get_scripts_list_markup(page=page)
             
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN_V2)
+            # Avoid API error if message content is identical
+            try:
+                await query.edit_message_text(text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN_V2)
+            except telegram.error.BadRequest as e:
+                if "Message is not modified" in str(e):
+                    pass
+                else:
+                    raise e
             
         except Exception as e:
             logger.error(f"Error in list_scripts_callback: {e}")
@@ -2893,52 +3036,7 @@ Choose an option below:"""
     async def server_status_callback(self, query, context):
         """Server status callback"""
         try:
-            status_parts = []
-            
-            # System metrics with error handling
-            try:
-                cpu_percent = psutil.cpu_percent(interval=1)
-                status_parts.append(f"• *CPU:* {escape_markdown(f'{cpu_percent}%')}")
-            except Exception:
-                status_parts.append("• *CPU:* Unable to read")
-            
-            try:
-                memory = psutil.virtual_memory()
-                status_parts.append(f"• *Memory:* {escape_markdown(f'{memory.percent}%')} \\({escape_markdown(f'{memory.used // (1024**3)}GB / {memory.total // (1024**3)}GB')}\\)")
-            except Exception:
-                status_parts.append("• *Memory:* Unable to read")
-            
-            try:
-                disk = psutil.disk_usage('/')
-                status_parts.append(f"• *Disk:* {escape_markdown(f'{disk.percent}%')} \\({escape_markdown(f'{disk.used // (1024**3)}GB / {disk.total // (1024**3)}GB')}\\)")
-            except Exception:
-                status_parts.append("• *Disk:* Unable to read")
-                
-            try:
-                running_scripts = len([s for s in self.script_manager.list_scripts() if s['status'] == 'running'])
-                total_scripts = len(self.script_manager.scripts)
-                scripts_with_input = len(self.script_manager.script_stdin_pipes)
-            except Exception:
-                running_scripts = 0
-                total_scripts = 0
-                scripts_with_input = 0
-            
-            active_terminals = len(self.script_manager.interactive_processes)
-            
-            status_text = f"""*📊 Enhanced Server Status*
-
-*⚡ Performance:*
-{chr(10).join(status_parts)}
-
-*🔄 Scripts Status:*
-• *Running:* {running_scripts}/{total_scripts}
-• *Interactive Ready:* {scripts_with_input}
-• *Total Managed:* {total_scripts}
-
-*🖥️ Terminal Sessions:*
-• *Active Interactive:* {active_terminals}
-
-*🔋 Health:* 🟢 Enhanced & Operational"""
+            status_text = await self._get_status_text()
             
             keyboard = [
                 [InlineKeyboardButton("🔄 Refresh", callback_data="server_status")],
@@ -3219,6 +3317,9 @@ Choose an option below:"""
         self.application.add_handler(CommandHandler("dropbox_code", self.dropbox_code_handler))
         self.application.add_handler(CommandHandler("dropbox_status", self.dropbox_status))
         self.application.add_handler(CommandHandler("refresh_token", self.refresh_dropbox_token))
+        # New command aliases
+        self.application.add_handler(CommandHandler("cmad", self.running_scripts_monitor))
+        self.application.add_handler(CommandHandler("running", self.running_scripts_monitor))
         self.application.add_handler(MessageHandler(filters.Document.ALL, self.handle_document))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
         self.application.add_handler(CallbackQueryHandler(self.button_callback))
