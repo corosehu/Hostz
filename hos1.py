@@ -2023,7 +2023,7 @@ Your server\\. Fully automated\\. Fully interactive\\. Fully yours\\.
         end_index = start_index + items_per_page
         page_scripts = sorted_scripts[start_index:end_index]
 
-        text = f"📂 *Your Enhanced Scripts (Page {page + 1}):*\n\n"
+        text = f"📂 *Your Enhanced Scripts \\(Page {page + 1}\\):*\n\n"
         keyboard = []
 
         for script in page_scripts:
